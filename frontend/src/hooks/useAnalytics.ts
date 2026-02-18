@@ -3,37 +3,46 @@ import { supabase } from '../supabaseClient';
 import type { AnalyticsData } from '../types';
 
 export const useAnalytics = () => {
-  // Dados do Dashboard Principal (Materialized View)
+  // Dados do Dashboard Principal
   const [data, setData] = useState<AnalyticsData[]>([]);
   
-  // NOVOS DADOS: CRM (View em Tempo Real)
+  // NOVOS DADOS: CRM
   const [crmData, setCrmData] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Estado para controlar o botão de atualizar
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchAllData();
   }, []);
 
-  // Função para forçar o banco a recalcular a Materialized View
   const refreshSnapshot = async () => {
     try {
       setRefreshing(true);
       console.log("🔄 Solicitando atualização da Materialized View...");
       
-      // Chama a função SQL que roda 'REFRESH MATERIALIZED VIEW'
+      // Aumenta o timeout do client do Supabase para essa chamada específica
+      // (Isso evita que o navegador desista antes do banco terminar)
       const { error } = await supabase.rpc('refresh_analytics');
       
-      if (error) throw error;
+      if (error) {
+        console.error("Erro RPC:", error);
+        // Se for erro de timeout, tratamos de forma amigável
+        if (error.message && (error.message.includes('timeout') || error.message.includes('canceling statement'))) {
+            throw new Error("O banco de dados demorou para responder. Tente novamente em 1 minuto.");
+        }
+        throw error;
+      }
       
       console.log("✅ View atualizada! Recarregando dados...");
-      // Após atualizar o banco, puxa os dados novamente do zero
       await fetchAllData(); 
+      
     } catch (err: any) {
       console.error("Erro ao atualizar snapshot:", err);
-      alert("Erro ao atualizar base de dados: " + err.message);
+      alert("Aviso: " + err.message);
     } finally {
       setRefreshing(false);
     }
@@ -46,17 +55,16 @@ export const useAnalytics = () => {
       
       const pageSize = 1000; 
       
-      // --- 1. BUSCA ANALYTICS GERAL (Paginação) ---
+      // --- 1. BUSCA ANALYTICS GERAL ---
       let allRows: any[] = [];
       let page = 0;
       let hasMore = true;
 
-      console.time("Fetching Data");
+      console.time("Fetching Analytics");
 
       while (hasMore) {
         const from = page * pageSize;
         const to = from + pageSize - 1;
-        
         const { data: result, error } = await supabase
           .from('analytics_completo')
           .select('*')
@@ -72,16 +80,17 @@ export const useAnalytics = () => {
           hasMore = false;
         }
       }
+      console.timeEnd("Fetching Analytics");
 
-      // --- 2. BUSCA DADOS CRM (Paginação) ---
+      // --- 2. BUSCA DADOS CRM ---
       let crmRows: any[] = [];
       let crmPage = 0;
       let crmHasMore = true;
 
+      console.time("Fetching CRM");
       while (crmHasMore) {
         const from = crmPage * pageSize;
         const to = from + pageSize - 1;
-        
         const { data: resultCrm, error: errorCrm } = await supabase
           .from('view_crm_dashboard')
           .select('*')
@@ -97,14 +106,13 @@ export const useAnalytics = () => {
           crmHasMore = false;
         }
       }
+      console.timeEnd("Fetching CRM");
       
-      console.timeEnd("Fetching Data");
-      console.log(`✅ Analytics: ${allRows.length} | ✅ CRM: ${crmRows.length}`);
+      console.log(`✅ Analytics Total: ${allRows.length} | ✅ CRM Total: ${crmRows.length}`);
 
-      // Formatação dos Dados Principais
+      // Formatação Analytics Geral
       const formattedData: AnalyticsData[] = allRows.map(row => {
         const n = (v: any) => (typeof v === 'number' ? v : Number(v) || 0);
-        
         let mesRefFmt = 'N/D';
         if (row.mes_referencia) {
             const parts = row.mes_referencia.split('-');

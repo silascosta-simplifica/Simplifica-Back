@@ -591,7 +591,7 @@ function App() {
           <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-3 rounded-xl shadow-lg shadow-blue-900/20"><LayoutDashboard className="text-white" size={28} /></div>
           <div>
             <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-white tracking-tight">Dashboard de Gestão</h1>
+                <h1 className="text-3xl font-bold text-white tracking-tight">Painel de Gestão</h1>
                 {/* BOTÃO DE ATUALIZAR DADOS */}
                 <button 
                     onClick={refreshSnapshot} 
