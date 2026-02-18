@@ -3,16 +3,10 @@ import { supabase } from '../supabaseClient';
 import type { AnalyticsData } from '../types';
 
 export const useAnalytics = () => {
-  // Dados do Dashboard Principal
   const [data, setData] = useState<AnalyticsData[]>([]);
-  
-  // NOVOS DADOS: CRM
   const [crmData, setCrmData] = useState<any[]>([]);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Estado para controlar o botão de atualizar
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -23,14 +17,10 @@ export const useAnalytics = () => {
     try {
       setRefreshing(true);
       console.log("🔄 Solicitando atualização da Materialized View...");
-      
-      // Aumenta o timeout do client do Supabase para essa chamada específica
-      // (Isso evita que o navegador desista antes do banco terminar)
       const { error } = await supabase.rpc('refresh_analytics');
       
       if (error) {
         console.error("Erro RPC:", error);
-        // Se for erro de timeout, tratamos de forma amigável
         if (error.message && (error.message.includes('timeout') || error.message.includes('canceling statement'))) {
             throw new Error("O banco de dados demorou para responder. Tente novamente em 1 minuto.");
         }
@@ -39,7 +29,6 @@ export const useAnalytics = () => {
       
       console.log("✅ View atualizada! Recarregando dados...");
       await fetchAllData(); 
-      
     } catch (err: any) {
       console.error("Erro ao atualizar snapshot:", err);
       alert("Aviso: " + err.message);
@@ -55,13 +44,12 @@ export const useAnalytics = () => {
       
       const pageSize = 1000; 
       
-      // --- 1. BUSCA ANALYTICS GERAL ---
+      // --- 1. ANALYTICS GERAL ---
       let allRows: any[] = [];
       let page = 0;
       let hasMore = true;
 
       console.time("Fetching Analytics");
-
       while (hasMore) {
         const from = page * pageSize;
         const to = from + pageSize - 1;
@@ -82,7 +70,7 @@ export const useAnalytics = () => {
       }
       console.timeEnd("Fetching Analytics");
 
-      // --- 2. BUSCA DADOS CRM ---
+      // --- 2. CRM (COM COORDENADAS) ---
       let crmRows: any[] = [];
       let crmPage = 0;
       let crmHasMore = true;
@@ -91,6 +79,7 @@ export const useAnalytics = () => {
       while (crmHasMore) {
         const from = crmPage * pageSize;
         const to = from + pageSize - 1;
+        // Seleciona explicitamente latitude e longitude da VIEW
         const { data: resultCrm, error: errorCrm } = await supabase
           .from('view_crm_dashboard')
           .select('*')
@@ -108,9 +97,9 @@ export const useAnalytics = () => {
       }
       console.timeEnd("Fetching CRM");
       
-      console.log(`✅ Analytics Total: ${allRows.length} | ✅ CRM Total: ${crmRows.length}`);
+      console.log(`✅ Analytics: ${allRows.length} | ✅ CRM: ${crmRows.length}`);
 
-      // Formatação Analytics Geral
+      // --- FORMATAÇÃO GERAL ---
       const formattedData: AnalyticsData[] = allRows.map(row => {
         const n = (v: any) => (typeof v === 'number' ? v : Number(v) || 0);
         let mesRefFmt = 'N/D';
@@ -160,8 +149,19 @@ export const useAnalytics = () => {
         };
       });
 
+      // --- FORMATAÇÃO CRM ---
+      // Aqui garantimos que latitude e longitude passem para o front
+      const crmFormatted = crmRows.map(row => ({
+          ...row,
+          latitude: row.latitude,   // Vem da View
+          longitude: row.longitude, // Vem da View
+          cidade: row.cidade,       // Vem da View
+          uf: row.uf,               // Vem da View
+          cep_norm: row.cep_uc ? String(row.cep_uc).replace(/\D/g, '') : null
+      }));
+
       setData(formattedData);
-      setCrmData(crmRows);
+      setCrmData(crmFormatted);
 
     } catch (err: any) {
       console.error('Erro Fatal no Dashboard:', err);
