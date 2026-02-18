@@ -31,6 +31,9 @@ jobs:
           LUMI_BASE_URL: ${{ secrets.LUMI_BASE_URL }}
           LUMI_EMAIL: ${{ secrets.LUMI_EMAIL }}
           LUMI_SENHA: ${{ secrets.LUMI_SENHA }}
+          LUMI_COOP_EMAIL: ${{ secrets.LUMI_COOP_EMAIL }} 
+          LUMI_COOP_SENHA: ${{ secrets.LUMI_COOP_SENHA }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           # Adicione outras variáveis do Lumi se precisar
         run: python services/lumi_service.py
 
