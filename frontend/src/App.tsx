@@ -5,11 +5,11 @@ import {
   Area, ComposedChart, Bar
 } from 'recharts';
 import { 
-  LayoutDashboard, Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Navigation, Activity, PieChart
+  LayoutDashboard, Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart
 } from 'lucide-react';
 import { 
   subMonths, isAfter, isBefore, startOfMonth, endOfMonth, format, 
-  addMonths, eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval, startOfDay 
+  addMonths, eachDayOfInterval, isSameDay, isWithinInterval, startOfDay 
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -94,7 +94,7 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                     attribution='&copy; OpenStreetMap'
                     url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                 />
-                {locations.map((loc, idx) => (
+                {locations.map((loc) => (
                     <Marker key={loc.id} position={[loc.lat, loc.lng]}>
                         <Popup className="custom-popup">
                             <div className="p-1 min-w-[150px]">
@@ -463,10 +463,7 @@ function App() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
-  const formatTarifa = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 5, maximumFractionDigits: 5 }).format(val) + '/kWh';
-  };
-    
+     
   const formatEnergySmart = (val: number, inputUnit: 'MWh' | 'kWh' = 'MWh') => {
     let valInMwh = inputUnit === 'kWh' ? val / 1000 : val;
     if (valInMwh >= 1) return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(valInMwh)} MWh`;
