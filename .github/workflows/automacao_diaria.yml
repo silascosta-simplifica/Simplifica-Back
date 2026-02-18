@@ -2,9 +2,8 @@ name: Atualização Diária (Robôs)
 
 on:
   schedule:
-    # Roda todo dia as 06:00 UTC (03:00 Brasil)
-    - cron: '0 6 * * *'
-  workflow_dispatch: # Permite rodar manualmente clicando num botão (bom para testes)
+    - cron: '0 6 * * *' # 03:00 Brasil
+  workflow_dispatch:
 
 jobs:
   executar-robos:
@@ -17,37 +16,37 @@ jobs:
       - name: Instalar Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10' # Versão estável
+          python-version: '3.10'
 
       - name: Instalar Dependências
         run: |
           pip install -r requirements.txt
-          pip install python-dotenv # Garantia caso seus scripts usem dotenv
+          pip install python-dotenv
 
+      # 👇 AQUI ESTÁ A MÁGICA PARA CONSERTAR O ERRO 👇
+      - name: Criar arquivo .env com Segredos
+        run: |
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
+          
+          echo "RD_TOKEN=${{ secrets.RD_TOKEN }}" >> .env
+          
+          echo "LUMI_BASE_URL=${{ secrets.LUMI_BASE_URL }}" >> .env
+          echo "LUMI_EMAIL=${{ secrets.LUMI_EMAIL }}" >> .env
+          echo "LUMI_SENHA=${{ secrets.LUMI_SENHA }}" >> .env
+          echo "LUMI_COOP_EMAIL=${{ secrets.LUMI_COOP_EMAIL }}" >> .env
+          echo "LUMI_COOP_SENHA=${{ secrets.LUMI_COOP_SENHA }}" >> .env
+          
+          echo "UNIFICA_BASE_URL=${{ secrets.UNIFICA_BASE_URL }}" >> .env
+          echo "UNIFICA_TOKEN=${{ secrets.UNIFICA_TOKEN }}" >> .env
+
+      # Como o arquivo .env agora existe, não precisamos passar 'env' em cada passo
       - name: Rodar Lumi Service
-        env: # Aqui injetamos as senhas que você cadastrou no GitHub
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          LUMI_BASE_URL: ${{ secrets.LUMI_BASE_URL }}
-          LUMI_EMAIL: ${{ secrets.LUMI_EMAIL }}
-          LUMI_SENHA: ${{ secrets.LUMI_SENHA }}
-          LUMI_COOP_EMAIL: ${{ secrets.LUMI_COOP_EMAIL }} 
-          LUMI_COOP_SENHA: ${{ secrets.LUMI_COOP_SENHA }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          # Adicione outras variáveis do Lumi se precisar
         run: python services/lumi_service.py
 
       - name: Rodar Unifica Service
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          UNIFICA_BASE_URL: ${{ secrets.UNIFICA_BASE_URL }}
-          UNIFICA_TOKEN: ${{ secrets.UNIFICA_TOKEN }}
         run: python services/unifica_service.py
 
       - name: Rodar RD Service
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          RD_TOKEN: ${{ secrets.RD_TOKEN }}
         run: python services/rd_service.py
