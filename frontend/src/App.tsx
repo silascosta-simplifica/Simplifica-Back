@@ -7,7 +7,7 @@ import {
 import { 
   LayoutDashboard, Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw
 } from 'lucide-react';
-import { subMonths, isAfter, isBefore, startOfMonth, endOfMonth } from 'date-fns';
+import { subMonths, isAfter, isBefore, endOfMonth } from 'date-fns';
 
 // --- COMPONENTES AUXILIARES ---
 
