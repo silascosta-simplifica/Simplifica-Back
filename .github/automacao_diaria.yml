@@ -1,0 +1,50 @@
+name: Atualização Diária (Robôs)
+
+on:
+  schedule:
+    # Roda todo dia as 06:00 UTC (03:00 Brasil)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Permite rodar manualmente clicando num botão (bom para testes)
+
+jobs:
+  executar-robos:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o código (Checkout)
+        uses: actions/checkout@v3
+
+      - name: Instalar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10' # Versão estável
+
+      - name: Instalar Dependências
+        run: |
+          pip install -r requirements.txt
+          pip install python-dotenv # Garantia caso seus scripts usem dotenv
+
+      - name: Rodar Lumi Service
+        env: # Aqui injetamos as senhas que você cadastrou no GitHub
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LUMI_BASE_URL: ${{ secrets.LUMI_BASE_URL }}
+          LUMI_EMAIL: ${{ secrets.LUMI_EMAIL }}
+          LUMI_SENHA: ${{ secrets.LUMI_SENHA }}
+          # Adicione outras variáveis do Lumi se precisar
+        run: python services/lumi_service.py
+
+      - name: Rodar Unifica Service
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          UNIFICA_BASE_URL: ${{ secrets.UNIFICA_BASE_URL }}
+          UNIFICA_TOKEN: ${{ secrets.UNIFICA_TOKEN }}
+        run: python services/unifica_service.py
+
+      - name: Rodar RD Service
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          RD_TOKEN: ${{ secrets.RD_TOKEN }}
+        run: python services/rd_service.py
