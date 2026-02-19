@@ -33,19 +33,14 @@ L.Icon.Default.mergeOptions({
 
 // --- COMPONENTES AUXILIARES ---
 
-// 1. Mapa de Clientes (VERSÃO FINAL - LEITURA DIRETA DO BANCO)
 const ClientMap = ({ clients }: { clients: any[] }) => {
-    
-    // Processa os pontos instantaneamente (sem fetch)
     const locations = useMemo(() => {
         const points: any[] = [];
         let validos = 0;
         
         clients.forEach(c => {
-            // Só adiciona se tiver latitude e longitude vindas do banco
             if (c.latitude && c.longitude) {
                 validos++;
-                // Adiciona um micro-deslocamento (jitter) para pontos no mesmo endereço não se sobreporem totalmente
                 const lat = Number(c.latitude) + (Math.random() - 0.5) * 0.0002;
                 const lng = Number(c.longitude) + (Math.random() - 0.5) * 0.0002;
                 
@@ -60,18 +55,16 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                 });
             }
         });
-        console.log(`[MAPA] Renderizando ${validos} pontos válidos do banco.`);
         return points;
     }, [clients]);
 
-    // Estado Inicial (Sem dados geográficos)
     if (locations.length === 0) {
         return (
             <div className="h-full w-full flex flex-col items-center justify-center bg-slate-900 text-center p-6 relative z-10">
                 <div className="bg-slate-800 p-6 rounded-full mb-6 border border-slate-700 shadow-xl">
                     <MapPin size={48} className="text-slate-500" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2">Sem dados geográficos</h3>
+                <h3 className="text-2xl font-display font-bold text-white mb-2">Sem dados geográficos</h3>
                 <p className="text-slate-400 mb-4 max-w-md">
                    Nenhum cliente na lista atual possui coordenadas cadastradas no banco de dados.
                 </p>
@@ -88,7 +81,7 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                 center={[-15.79, -47.88]} 
                 zoom={4} 
                 style={{ height: '100%', width: '100%' }}
-                preferCanvas={true} // Melhora performance com muitos pontos
+                preferCanvas={true}
             >
                 <TileLayer
                     attribution='&copy; OpenStreetMap'
@@ -98,7 +91,7 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                     <Marker key={loc.id} position={[loc.lat, loc.lng]}>
                         <Popup className="custom-popup">
                             <div className="p-1 min-w-[150px]">
-                                <h4 className="font-bold text-slate-800 text-sm mb-1 border-b pb-1">{loc.city}-{loc.uf}</h4>
+                                <h4 className="font-bold font-display text-slate-800 text-sm mb-1 border-b pb-1">{loc.city}-{loc.uf}</h4>
                                 <div className="text-xs text-slate-600 mt-1">
                                     <p className="truncate font-medium text-slate-800">{loc.name}</p>
                                     <p className="mt-1">Consumo: <span className="font-bold text-blue-600">{Math.round(loc.mwh)} MWh</span></p>
@@ -118,7 +111,6 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
     );
 };
 
-// 2. DateRangePicker
 const DateRangePicker = ({ onChange, selectedRange }: any) => {
     const [isOpen, setIsOpen] = useState(false);
     const [viewDate, setViewDate] = useState(new Date());
@@ -188,7 +180,7 @@ const DateRangePicker = ({ onChange, selectedRange }: any) => {
                 <div className="absolute top-full left-0 mt-2 p-4 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 w-[300px]">
                     <div className="flex justify-between items-center mb-4">
                         <button onClick={prevMonth} className="p-1 hover:bg-slate-800 rounded text-slate-400"><ChevronLeft size={16}/></button>
-                        <span className="text-sm font-bold text-white capitalize">{format(viewDate, 'MMMM yyyy', { locale: ptBR })}</span>
+                        <span className="text-sm font-bold font-display text-white capitalize">{format(viewDate, 'MMMM yyyy', { locale: ptBR })}</span>
                         <button onClick={nextMonth} className="p-1 hover:bg-slate-800 rounded text-slate-400"><ChevronRight size={16}/></button>
                     </div>
 
@@ -224,7 +216,6 @@ const DateRangePicker = ({ onChange, selectedRange }: any) => {
     );
 };
 
-// 3. MultiSelect
 const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon }: any) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -294,7 +285,6 @@ const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon }: a
     );
 };
 
-// 4. CrmKpiCard
 const CrmKpiCard = ({ title, count, mwh, color = "blue" }: any) => {
     const colorClasses: any = {
         blue: "text-blue-400 border-blue-500/30 bg-blue-500/10",
@@ -317,9 +307,9 @@ const CrmKpiCard = ({ title, count, mwh, color = "blue" }: any) => {
 
     return (
         <div className={`p-4 rounded-xl border ${activeClass} flex flex-col justify-between min-w-[180px] flex-1 shadow-sm`}>
-            <p className="text-[10px] font-bold uppercase tracking-wider opacity-80 mb-2 truncate" title={title}>{title}</p>
+            <p className="text-[10px] font-bold font-display uppercase tracking-wider opacity-80 mb-2 truncate" title={title}>{title}</p>
             <div>
-                <p className="text-2xl font-bold text-white">{count}</p>
+                <p className="text-2xl font-bold font-display text-white">{count}</p>
                 <p className="text-xs opacity-70 mt-1 flex items-center gap-1">
                    <Zap size={10}/> {new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(mwh)} MWh
                 </p>
@@ -328,14 +318,13 @@ const CrmKpiCard = ({ title, count, mwh, color = "blue" }: any) => {
     );
 };
 
-// 5. FinancialTable
 const FinancialTable = ({ title, data, colorClass, totalValue, totalCompensated, showHeader = true }: any) => (
   <div className={`bg-slate-900 rounded-xl border border-slate-800 overflow-hidden flex flex-col h-full shadow-lg`}>
     {showHeader && (
       <div className={`p-4 border-b border-slate-700 ${colorClass} bg-opacity-10`}>
-        <h3 className="font-bold text-sm uppercase tracking-wide text-slate-200 mb-1">{title}</h3>
+        <h3 className="font-bold font-display text-sm uppercase tracking-wide text-slate-200 mb-1">{title}</h3>
         <div className="flex justify-between items-end">
-          <div><p className="text-xs text-slate-400">Total Valor</p><p className="text-xl font-bold text-white">{totalValue}</p></div>
+          <div><p className="text-xs text-slate-400">Total Valor</p><p className="text-xl font-display font-bold text-white">{totalValue}</p></div>
           <div className="text-right">
             <p className="text-xs text-slate-400">Total Compensado</p>
             <p className="text-sm font-mono text-yellow-400 flex items-center gap-1 justify-end"><Zap size={14}/> {totalCompensated}</p>
@@ -344,7 +333,7 @@ const FinancialTable = ({ title, data, colorClass, totalValue, totalCompensated,
       </div>
     )}
     <div className="overflow-auto flex-1 h-[300px] relative"> 
-      {!showHeader && <div className={`sticky top-0 p-2 text-xs font-bold uppercase tracking-wider text-center ${colorClass.split(' ')[0]} bg-slate-950/80 backdrop-blur-sm z-10 border-b border-slate-800`}>{title}</div>}
+      {!showHeader && <div className={`sticky top-0 p-2 text-xs font-bold font-display uppercase tracking-wider text-center ${colorClass.split(' ')[0]} bg-slate-950/80 backdrop-blur-sm z-10 border-b border-slate-800`}>{title}</div>}
       
       <table className="w-full text-sm text-left text-slate-400">
         <thead className="text-xs text-slate-200 uppercase bg-slate-900/50 sticky top-0 z-0">
@@ -366,15 +355,44 @@ const FinancialTable = ({ title, data, colorClass, totalValue, totalCompensated,
   </div>
 );
 
-// --- APP PRINCIPAL ---
+const CustomTooltipEvolucao = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-slate-800 p-3 border border-slate-700 rounded-lg shadow-xl text-xs min-w-[200px] z-50 relative">
+                <p className="font-bold text-white mb-3 border-b border-slate-700 pb-2">{label}</p>
+                <div className="space-y-2">
+                    {payload.map((entry: any, index: number) => {
+                        let ucs = 0;
+                        if (entry.dataKey === 'mwhAccumulated') ucs = entry.payload.ucsAccumulated;
+                        if (entry.dataKey === 'mwhAdded') ucs = entry.payload.ucsAdded;
+                        if (entry.dataKey === 'mwhLost') ucs = entry.payload.ucsLost;
 
+                        return (
+                            <div key={index} className="flex justify-between items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: entry.color }}></div>
+                                    <span className="text-slate-300 font-medium">{entry.name}</span>
+                                </div>
+                                <div className="text-right">
+                                    <div className="font-bold text-white">{entry.value} MWh</div>
+                                    <div className="text-[10px] text-slate-400">{ucs} UCs</div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
+
+// --- APP PRINCIPAL ---
 function App() {
   const { data: rawData, crmData, loading, refreshSnapshot, refreshing } = useAnalytics();
   
-  // ESTADO DE ABAS ATUALIZADO: 'geral' é a nova home, 'financeiro' agrupa as antigas faturamento/recebimento
   const [currentTab, setCurrentTab] = useState<'geral' | 'financeiro' | 'operacional' | 'carteira' | 'crm' | 'localizacao'>('geral');
   
-  // Filtros Globais
   const [selectedConcessionaria, setSelectedConcessionaria] = useState('Todas');
   const [selectedMesRef, setSelectedMesRef] = useState(() => {
       const now = new Date();
@@ -383,20 +401,17 @@ function App() {
   const [selectedArea, setSelectedArea] = useState('Todas');
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
 
-  // Filtros Operacional
   const [searchText, setSearchText] = useState('');
   const [opFilterStatus, setOpFilterStatus] = useState('Todos'); 
   const [opFilterEtapa, setOpFilterEtapa] = useState('Todas'); 
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null); 
 
-  // Filtros CRM
   const [crmSearch, setCrmSearch] = useState('');
   const [crmFilterConcessionaria, setCrmFilterConcessionaria] = useState<string[]>([]);
   const [crmFilterArea, setCrmFilterArea] = useState<string[]>([]);
   const [crmFilterEtapa, setCrmFilterEtapa] = useState<string[]>([]);
   const [crmFilterStatus, setCrmFilterStatus] = useState<string[]>([]);
 
-  // 1. TRATAMENTO INICIAL (MANTIDO)
   const data = useMemo(() => {
     if (!rawData) return [];
     return rawData.map((d: any) => {
@@ -472,7 +487,7 @@ function App() {
         maximumFractionDigits: 5
     }).format(val);
   };
-
+      
   const formatEnergySmart = (val: number, inputUnit: 'MWh' | 'kWh' = 'MWh') => {
     let valInMwh = inputUnit === 'kWh' ? val / 1000 : val;
     if (valInMwh >= 1) return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(valInMwh)} MWh`;
@@ -495,7 +510,6 @@ function App() {
     return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'No Prazo', value: 'No Prazo' };
   };
     
-  // Listas de Filtros
   const uniqueConcessionarias = useMemo(() => ['Todas', ...new Set(data.map(d => d.concessionaria_norm).filter(Boolean).sort())], [data]);
   const uniqueAreas = useMemo(() => ['Todas', ...new Set(data.map(d => d.area_norm).filter(Boolean).sort())], [data]);
   const uniqueMesesRef = useMemo(() => {
@@ -516,7 +530,6 @@ function App() {
     return Array.from(map.values());
   }, [data]);
 
-  // --- FILTRAGEM PRINCIPAL (MANTIDO) ---
   const filteredData = useMemo(() => {
     return data.filter(item => {
       const matchConc = selectedConcessionaria === 'Todas' || item.concessionaria_norm === selectedConcessionaria;
@@ -544,7 +557,6 @@ function App() {
     });
   }, [data, selectedConcessionaria, selectedArea, selectedMesRef, dateRange]);
 
-  // --- MACRO METRICS (MANTIDO) ---
   const macroMetrics = useMemo(() => {
     const activeData = filteredData;
     const hasStatus = (s: string) => s && s !== 'Indefinido' && s !== 'null' && s.trim() !== '';
@@ -582,20 +594,15 @@ function App() {
     };
   }, [filteredData]);
 
-  // NOVO: Métricas para Visão Geral
   const generalMetrics = useMemo(() => {
     const totalUCs = filteredData.length;
-    // Soma Receita Realizada + Pendente para visão global
     const totalRevenue = macroMetrics.realizado + macroMetrics.pendente;
-    // Soma Energia Realizada + Pendente
     const totalEnergy = macroMetrics.energiaRealizada + macroMetrics.energiaPendente;
-    // Ticket Médio
     const avgTicket = totalUCs > 0 ? totalRevenue / totalUCs : 0;
 
     return { totalUCs, totalRevenue, totalEnergy, avgTicket };
   }, [filteredData, macroMetrics]);
 
-  // --- CHART DATA (MANTIDO) ---
   const chartData = useMemo(() => {
     const endDate = selectedMesRef === 'Todos' ? new Date() : endOfMonth(parseRefMonth(selectedMesRef));
     const startDate = subMonths(endDate, 11);
@@ -612,6 +619,7 @@ function App() {
        const [mes, ano] = mesKey.split('/').map(Number);
        const dateRef = new Date(ano, mes - 1, 28);
        let mwhEntrada = 0, mwhSaida = 0, mwhCarteira = 0;
+       let ucsEntrada = 0, ucsSaida = 0, ucsCarteira = 0;
 
        uniqueUCsProfile.forEach(uc => {
           if (selectedConcessionaria !== 'Todas' && uc.concessionaria_norm !== selectedConcessionaria) return;
@@ -621,11 +629,11 @@ function App() {
           const dtCancel = parseBrDate(uc.data_saida_norm);
           const consumo = uc.consumo_mwh || 0;
 
-          if (dtProto && dtProto.getMonth() === (mes-1) && dtProto.getFullYear() === ano) mwhEntrada += consumo;
-          if (dtCancel && dtCancel.getMonth() === (mes-1) && dtCancel.getFullYear() === ano) mwhSaida += consumo;
+          if (dtProto && dtProto.getMonth() === (mes-1) && dtProto.getFullYear() === ano) { mwhEntrada += consumo; ucsEntrada++; }
+          if (dtCancel && dtCancel.getMonth() === (mes-1) && dtCancel.getFullYear() === ano) { mwhSaida += consumo; ucsSaida++; }
           
           const isActive = (!dtProto || isBefore(dtProto, dateRef)) && (!dtCancel || isAfter(dtCancel, dateRef));
-          if (isActive) mwhCarteira += consumo;
+          if (isActive) { mwhCarteira += consumo; ucsCarteira++; }
        });
 
        const currentTotalMwh = Math.round(mwhCarteira);
@@ -636,11 +644,69 @@ function App() {
        }
        previousTotalMwh = currentTotalMwh;
 
-       return { name: mesKey, mwhAdded: Number(mwhEntrada.toFixed(1)), mwhLost: Number(mwhSaida.toFixed(1)), mwhAccumulated: currentTotalMwh, growthPct: Number(growthPct.toFixed(1)) };
+       return { 
+           name: mesKey, 
+           mwhAdded: Number(mwhEntrada.toFixed(1)), ucsAdded: ucsEntrada,
+           mwhLost: Number(mwhSaida.toFixed(1)), ucsLost: ucsSaida,
+           mwhAccumulated: currentTotalMwh, ucsAccumulated: ucsCarteira,
+           growthPct: Number(growthPct.toFixed(1)) 
+       };
     });
   }, [uniqueUCsProfile, selectedConcessionaria, selectedArea, selectedMesRef]);
 
-  // --- DADOS CARTEIRA (MANTIDO) ---
+  const consumptionChartData = useMemo(() => {
+    const endDate = selectedMesRef === 'Todos' ? new Date() : endOfMonth(parseRefMonth(selectedMesRef));
+    const startDate = subMonths(endDate, 11);
+    const monthsKeys: string[] = [];
+    let curr = new Date(startDate);
+    while (curr <= endDate) {
+        monthsKeys.push(`${(curr.getMonth()+1).toString().padStart(2,'0')}/${curr.getFullYear()}`);
+        curr = new Date(curr.setMonth(curr.getMonth()+1));
+    }
+
+    const validData = data.filter(item => {
+        const matchConc = selectedConcessionaria === 'Todas' || item.concessionaria_norm === selectedConcessionaria;
+        const matchArea = selectedArea === 'Todas' || item.area_norm === selectedArea;
+        
+        const s = item.status_norm;
+        const isValidStatus = s && s !== 'Indefinido' && s !== 'null' && s.trim() !== '';
+
+        return matchConc && matchArea && isValidStatus;
+    });
+
+    let totalValue = 0;
+    let totalCompensated = 0;
+
+    const monthlyData = monthsKeys.map(mesKey => {
+        const items = validData.filter(d => d.mes_norm === mesKey);
+        let consMwh = 0;
+        let compKwh = 0;
+        let val = 0;
+
+        items.forEach(item => {
+            consMwh += item.consumo_mwh || 0;
+            compKwh += item.compensado_kwh || 0;
+            val += item.total_fatura || 0;
+        });
+
+        const consKwh = consMwh * 1000;
+        
+        totalValue += val;
+        totalCompensated += compKwh;
+
+        return {
+            name: mesKey,
+            consumoKwh: Math.round(consKwh),
+            compensadoKwh: Math.round(compKwh),
+            faturado: val
+        };
+    });
+
+    const tarifaMedia = totalCompensated > 0 ? totalValue / totalCompensated : 0;
+
+    return { data: monthlyData, tarifaMedia };
+  }, [data, selectedConcessionaria, selectedArea, selectedMesRef]);
+
   const portfolioData = useMemo(() => {
     const allConcessionarias = Array.from(new Set(data.map(d => d.concessionaria_norm).filter(c => c !== 'Outra'))).sort();
     const matrix: any = {};
@@ -688,7 +754,6 @@ function App() {
     return { matrix, allConcessionarias, concessionariaTotals, globalTotal, areaTotals };
   }, [uniqueUCsProfile]);
 
-  // --- DADOS OPERACIONAIS (MANTIDO) ---
   const operationalData = useMemo(() => {
     if (selectedMesRef === 'Todos') return [];
     
@@ -729,7 +794,6 @@ function App() {
     setSortConfig({ key, direction });
   };
 
-  // --- LÓGICA CRM E MAPA (MANTIDA) ---
   const crmProcessed = useMemo(() => {
     if (!crmData) return { filtered: [], stats: null, options: { concessionarias: [], areas: [], etapas: [], status: [] } };
 
@@ -840,10 +904,17 @@ function App() {
       {/* HEADER */}
       <header className="flex flex-col md:flex-row items-center justify-between mb-8 border-b border-slate-800 pb-6 gap-6">
         <div className="flex items-center gap-4">
-          <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-3 rounded-xl shadow-lg shadow-blue-900/20"><LayoutDashboard className="text-white" size={28} /></div>
+          
+          {/* NOVA LOGO AQUI */}
+          <img 
+             src="https://media.licdn.com/dms/image/v2/D4E0BAQH3m3B1igUKyg/company-logo_200_200/company-logo_200_200/0/1734467902204/simplifica_energia_logo?e=2147483647&v=beta&t=eE-Hec5Jt2I6UxmI2TGJav0ErDRxQZJF6XyjIef5914" 
+             alt="Logo Simplifica Energia" 
+             className="w-14 h-14 rounded-xl shadow-lg object-contain bg-white"
+          />
+
           <div>
             <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-white tracking-tight">Dashboard de Gestão</h1>
+                <h1 className="text-3xl font-bold font-display text-white tracking-tight">Dashboard de Gestão</h1>
                 <button 
                     onClick={refreshSnapshot} 
                     disabled={refreshing}
@@ -857,7 +928,6 @@ function App() {
           </div>
         </div>
         <div className="flex bg-slate-900 p-1.5 rounded-xl border border-slate-800 overflow-x-auto max-w-full">
-            {/* ABAS REORGANIZADAS */}
             <button onClick={() => setCurrentTab('geral')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'geral' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Activity size={18}/> Visão Geral</button>
             <button onClick={() => setCurrentTab('financeiro')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'financeiro' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><DollarSign size={18}/> Financeiro</button>
             <button onClick={() => setCurrentTab('operacional')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'operacional' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><CalendarIcon size={18}/> Operacional</button>
@@ -867,30 +937,29 @@ function App() {
         </div>
       </header>
 
-      {/* FILTROS GLOBAIS (Não aparecem na Localização e CRM) */}
+      {/* FILTROS GLOBAIS */}
       {currentTab !== 'carteira' && currentTab !== 'crm' && currentTab !== 'localizacao' && (
       <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm animate-in fade-in zoom-in duration-300">
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-slate-500 font-bold flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
+          <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
           <div className="relative"><select value={selectedConcessionaria} onChange={e => setSelectedConcessionaria(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueConcessionarias.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
         </div>
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-slate-500 font-bold flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
+          <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
           <div className="relative"><select value={selectedArea} onChange={e => setSelectedArea(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueAreas.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
         </div>
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-slate-500 font-bold flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Mês Referência</label>
+          <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Mês Referência</label>
           <div className="relative"><select value={selectedMesRef} onChange={e => setSelectedMesRef(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueMesesRef.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
         </div>
-        {/* FILTRO DE DATA PREVISTA */}
         <div className="flex flex-col gap-2">
-            <label className="text-xs text-slate-500 font-bold flex items-center gap-1 uppercase tracking-wider"><CalendarIcon size={12}/> Período de Emissão Prevista</label>
+            <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><CalendarIcon size={12}/> Período de Emissão Prevista</label>
             <DateRangePicker selectedRange={dateRange} onChange={setDateRange} />
         </div>
       </section>
       )}
 
-      {/* --- ABA 1: VISÃO GERAL (NOVA) --- */}
+      {/* --- ABA 1: VISÃO GERAL --- */}
       {currentTab === 'geral' && (
           <div className="animate-in fade-in zoom-in duration-300">
               {/* KPIs de Topo */}
@@ -903,18 +972,18 @@ function App() {
                   ].map((kpi, idx) => (
                       <div key={idx} className={`bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-${kpi.color}-500/30 transition-all`}>
                           <div className={`absolute -right-4 -top-4 p-3 bg-${kpi.color}-500/10 rounded-full opacity-50`}><kpi.icon size={64} className={`text-${kpi.color}-500`} /></div>
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{kpi.title}</p>
-                          <h3 className="text-2xl font-bold text-white">{kpi.value}</h3>
+                          <p className="text-xs font-bold font-display text-slate-500 uppercase tracking-wider mb-1">{kpi.title}</p>
+                          <h3 className="text-2xl font-bold font-display text-white">{kpi.value}</h3>
                           <p className={`text-xs mt-1 text-${kpi.color}-400 font-medium`}>{kpi.sub}</p>
                       </div>
                   ))}
               </div>
 
-              {/* Gráfico de Crescimento */}
+              {/* Gráfico 1: Crescimento MWh */}
               <div className="grid grid-cols-1 gap-6 mb-8">
                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col">
                   <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2"><TrendingUp size={20} className="text-blue-500"/> Evolução da Carteira (MWh)</h3>
+                    <h3 className="text-lg font-bold font-display text-white flex items-center gap-2"><TrendingUp size={20} className="text-blue-500"/> Evolução da Carteira (MWh vs UCs)</h3>
                     <div className="flex gap-4 text-xs font-medium">
                       <span className="flex items-center gap-1.5 text-slate-400"><div className="w-3 h-3 bg-emerald-500/20 border border-emerald-500 rounded-full"></div> Carteira Total</span>
                       <span className="flex items-center gap-1.5 text-emerald-400"><div className="w-3 h-3 bg-emerald-400 rounded-sm"></div> Nova Carga</span>
@@ -924,16 +993,60 @@ function App() {
                   <div className="h-[400px] w-full flex-1 min-h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barGap={0}>
-                        <defs><linearGradient id="gradMwh" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient></defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                        <XAxis dataKey="name" stroke="#64748b" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis yAxisId="left" stroke="#64748b" tick={{fontSize: 11}} tickFormatter={(val) => `${val} MWh`} axisLine={false} tickLine={false} dx={-10} />
-                        <YAxis yAxisId="right" orientation="right" stroke="#64748b" tick={{fontSize: 11}} allowDecimals={false} axisLine={false} tickLine={false} dx={10} />
-                        <RechartsTooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '12px' }} itemStyle={{ color: '#e2e8f0', fontSize: '12px' }} />
-                        <Area type="monotone" dataKey="mwhAccumulated" yAxisId="left" stroke="#10b981" fill="url(#gradMwh)" strokeWidth={2} name="Carteira Total" />
-                        <Bar dataKey="mwhAdded" yAxisId="right" fill="#34d399" radius={[4, 4, 0, 0]} name="Nova Carga" barSize={20} />
+                        <defs><linearGradient id="gradMwh" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9FD140" stopOpacity={0.3}/><stop offset="95%" stopColor="#9FD140" stopOpacity={0}/></linearGradient></defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#2A4032" vertical={false} />
+                        <XAxis dataKey="name" stroke="#8C8C8C" tick={{fontSize: 12, fontFamily: 'Plus Jakarta Sans'}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis yAxisId="left" stroke="#8C8C8C" tick={{fontSize: 11, fontFamily: 'Plus Jakarta Sans'}} tickFormatter={(val) => `${val} MWh`} axisLine={false} tickLine={false} dx={-10} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#8C8C8C" tick={{fontSize: 11, fontFamily: 'Plus Jakarta Sans'}} allowDecimals={false} axisLine={false} tickLine={false} dx={10} />
+                        <RechartsTooltip content={<CustomTooltipEvolucao />} cursor={{fill: '#233328', opacity: 0.4}} />
+                        <Area type="monotone" dataKey="mwhAccumulated" yAxisId="left" stroke="#9FD140" fill="url(#gradMwh)" strokeWidth={2} name="Carteira Total" />
+                        <Bar dataKey="mwhAdded" yAxisId="right" fill="#8BBA35" radius={[4, 4, 0, 0]} name="Nova Carga" barSize={20} />
                         <Bar dataKey="mwhLost" yAxisId="right" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Perda Carga" barSize={20} />
                       </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* Gráfico 2: Consumo vs Compensação */}
+              <div className="grid grid-cols-1 gap-6 mb-8">
+                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <div>
+                        <h3 className="text-lg font-bold font-display text-white flex items-center gap-2"><Zap size={20} className="text-yellow-500"/> Consumo vs Compensação (kWh)</h3>
+                        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                            <CheckCircle2 size={12} className="text-emerald-500" /> Apenas faturas capturadas e validadas (Status de pagamento válido)
+                        </p>
+                    </div>
+                    <div className="text-right bg-slate-800 p-3 rounded-xl border border-slate-700">
+                        <p className="text-[10px] font-display text-slate-400 uppercase tracking-wider font-bold mb-1 flex items-center gap-1 justify-end"><DollarSign size={10}/> Tarifa Média (Período)</p>
+                        <div className="text-lg font-display text-emerald-400 font-bold">
+                            {formatTarifa(consumptionChartData.tarifaMedia)}<span className="text-xs text-emerald-600 ml-1">/kWh</span>
+                        </div>
+                    </div>
+                  </div>
+                  <div className="h-[400px] w-full flex-1 min-h-[400px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={consumptionChartData.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barGap={2}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#2A4032" vertical={false} />
+                            <XAxis dataKey="name" stroke="#8C8C8C" tick={{fontSize: 12, fontFamily: 'Plus Jakarta Sans'}} axisLine={false} tickLine={false} dy={10} />
+                            <YAxis yAxisId="left" stroke="#8C8C8C" tick={{fontSize: 11, fontFamily: 'Plus Jakarta Sans'}} tickFormatter={(val) => `${(val/1000).toFixed(0)}k kWh`} axisLine={false} tickLine={false} dx={-10} />
+                            
+                            <RechartsTooltip 
+                                cursor={{fill: '#233328', opacity: 0.4}}
+                                contentStyle={{ backgroundColor: '#14211A', borderColor: '#2A4032', borderRadius: '12px' }} 
+                                itemStyle={{ color: '#F6F6F6', fontSize: '12px', fontWeight: 'bold' }}
+                                labelStyle={{ color: '#8C8C8C', fontSize: '12px', marginBottom: '8px', borderBottom: '1px solid #2A4032', paddingBottom: '4px' }}
+                                formatter={(value: any, name: any) => {
+                                    if (name === "Consumo" || name === "Compensação") {
+                                        return [`${new Intl.NumberFormat('pt-BR').format(value)} kWh`, name];
+                                    }
+                                    return [value, name];
+                                }}
+                            />
+                            <Bar dataKey="consumoKwh" yAxisId="left" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Consumo" barSize={30} />
+                            <Bar dataKey="compensadoKwh" yAxisId="left" fill="#eab308" radius={[4, 4, 0, 0]} name="Compensação" barSize={30} />
+                        </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
@@ -941,70 +1054,11 @@ function App() {
           </div>
       )}
 
-      {/* --- ABA 2: FINANCEIRO (FUSÃO DE FATURAMENTO + RECEBIMENTO) --- */}
+      {/* --- ABA 2: FINANCEIRO --- */}
       {currentTab === 'financeiro' && (
-          <div className="animate-in fade-in zoom-in duration-300 space-y-8">
-             {/* SEÇÃO 1: FATURAMENTO (POTENCIAL / REAL / PENDENTE) */}
+          <div className="animate-in fade-in zoom-in duration-300">
              <div>
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><DollarSign size={16}/> Resumo de Faturamento</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    
-                    {/* CARD: FATURAMENTO POTENCIAL */}
-                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
-                    <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
-                    <h3 className="text-slate-400 font-bold mb-2 text-xs uppercase tracking-wider">Faturamento Potencial</h3>
-                    <div className="relative z-10">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">{formatMoney(macroMetrics.estimado)}</h2>
-                        <div className="flex flex-wrap gap-2 text-xs mt-3">
-                            <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdEstimado} UCs</span>
-                            <span className="text-emerald-300 bg-emerald-950 border border-emerald-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaEstimada, 'MWh')}</span>
-                            {/* NOVA TAG DE TARIFA */}
-                            <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Estimada">
-                                <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaEstimada)}/kWh
-                            </span>
-                        </div>
-                    </div>
-                    </div>
-
-                    {/* CARD: FATURAMENTO REALIZADO */}
-                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
-                    <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-blue-500 rounded-full"><FileText size={120} /></div>
-                    <h3 className="text-slate-400 font-bold mb-2 text-xs uppercase tracking-wider">Faturamento Realizado</h3>
-                    <div className="relative z-10">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-blue-500 tracking-tight">{formatMoney(macroMetrics.realizado)}</h2>
-                        <div className="flex flex-wrap gap-2 text-xs mt-3">
-                            <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdRealizado} UCs</span>
-                            <span className="text-yellow-300 bg-yellow-950 border border-yellow-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaRealizada, 'MWh')}</span>
-                            {/* NOVA TAG DE TARIFA */}
-                            <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Realizada">
-                                <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaRealizada)}/kWh
-                            </span>
-                        </div>
-                    </div>
-                    </div>
-
-                    {/* CARD: PENDENTE */}
-                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden border-l-4 border-l-amber-500">
-                    <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-amber-500 rounded-full"><Clock size={120} /></div>
-                    <h3 className="text-slate-400 font-bold mb-2 text-xs uppercase tracking-wider">Pendente</h3>
-                    <div className="relative z-10">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-amber-500 tracking-tight">{formatMoney(macroMetrics.pendente)}</h2>
-                        <div className="flex flex-wrap gap-2 text-xs mt-3">
-                            <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md inline-block font-medium">{macroMetrics.qtdPendente} UCs</span>
-                            <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaPendente, 'MWh')}</span>
-                            {/* NOVA TAG DE TARIFA */}
-                            <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Pendente">
-                                <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaPendente)}/kWh
-                            </span>
-                        </div>
-                    </div>
-                    </div>
-                </div>
-             </div>
-
-             {/* SEÇÃO 2: RECEBIMENTO (CARDS E TABELAS) */}
-             <div>
-                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2 mt-8"><Wallet size={16}/> Detalhamento de Recebimentos</h3>
+                 <h3 className="text-sm font-bold font-display text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><Wallet size={16}/> Detalhamento de Recebimentos</h3>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     {[
                         { label: 'Recebido', data: financialGroups.recebido, color: 'text-emerald-400', icon: CheckCircle2, iconColor: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
@@ -1014,8 +1068,8 @@ function App() {
                     ].map((item, idx) => (
                         <div key={idx} className={`p-5 rounded-2xl border flex justify-between items-center group hover:scale-[1.02] transition-all shadow-sm ${item.bg} ${item.border}`}>
                         <div>
-                            <p className="text-xs text-slate-400 mb-1 font-bold uppercase tracking-wider">{item.label}</p>
-                            <p className={`text-xl font-bold ${item.color}`}>{formatMoney(item.data.val)}</p>
+                            <p className="text-xs text-slate-400 mb-1 font-bold font-display uppercase tracking-wider">{item.label}</p>
+                            <p className={`text-xl font-display font-bold ${item.color}`}>{formatMoney(item.data.val)}</p>
                             <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Zap size={10}/> {formatEnergySmart(item.data.energy, 'MWh')}</p>
                         </div>
                         <div className="flex flex-col items-end gap-2">
@@ -1036,13 +1090,66 @@ function App() {
           </div>
       )}
 
-      {/* --- ABA 3: OPERACIONAL (MANTIDA IGUAL) --- */}
+      {/* --- ABA 3: OPERACIONAL --- */}
       {currentTab === 'operacional' && (
-        <div className="animate-in fade-in zoom-in duration-300">
+        <div className="animate-in fade-in zoom-in duration-300 space-y-8">
+            
+            {/* CARDS DE RESUMO MOVIDOS PARA CÁ */}
+            <div>
+                <h3 className="text-sm font-bold font-display text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><DollarSign size={16}/> Resumo de Faturamento</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
+                    <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
+                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturamento Potencial</h3>
+                    <div className="relative z-10">
+                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-white tracking-tight">{formatMoney(macroMetrics.estimado)}</h2>
+                        <div className="flex flex-wrap gap-2 text-xs mt-3">
+                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdEstimado} UCs</span>
+                        <span className="text-emerald-300 bg-emerald-950 border border-emerald-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaEstimada, 'MWh')}</span>
+                        <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Estimada">
+                            <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaEstimada)}/kWh
+                        </span>
+                        </div>
+                    </div>
+                    </div>
+
+                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
+                    <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-blue-500 rounded-full"><FileText size={120} /></div>
+                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturamento Realizado</h3>
+                    <div className="relative z-10">
+                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-blue-500 tracking-tight">{formatMoney(macroMetrics.realizado)}</h2>
+                        <div className="flex flex-wrap gap-2 text-xs mt-3">
+                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdRealizado} UCs</span>
+                        <span className="text-yellow-300 bg-yellow-950 border border-yellow-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaRealizada, 'MWh')}</span>
+                        <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Realizada">
+                            <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaRealizada)}/kWh
+                        </span>
+                        </div>
+                    </div>
+                    </div>
+
+                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden border-l-4 border-l-amber-500">
+                    <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-amber-500 rounded-full"><Clock size={120} /></div>
+                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Pendente</h3>
+                    <div className="relative z-10">
+                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-amber-500 tracking-tight">{formatMoney(macroMetrics.pendente)}</h2>
+                        <div className="flex flex-wrap gap-2 text-xs mt-3">
+                            <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdPendente} UCs</span>
+                            <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaPendente, 'MWh')}</span>
+                            <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Pendente">
+                                <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaPendente)}/kWh
+                            </span>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+
+          {/* TABELA DE PREVISÃO VS REALIZADO */}
           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden">
              <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900/50">
                <div>
-                 <h2 className="text-xl font-bold text-white flex items-center gap-2"><CalendarIcon className="text-blue-500" size={24}/> Previsão vs Realizado</h2>
+                 <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><CalendarIcon className="text-blue-500" size={24}/> Previsão vs Realizado</h2>
                  <p className="text-sm text-slate-400">Acompanhamento de emissão de faturas</p>
                </div>
                <div className="relative flex items-center gap-4">
@@ -1087,7 +1194,7 @@ function App() {
              {selectedMesRef === 'Todos' ? (
                 <div className="flex flex-col items-center justify-center h-[400px] text-slate-500">
                     <MousePointerClick size={48} className="mb-4 opacity-50" />
-                    <p className="text-lg font-medium">Selecione um Mês de Referência</p>
+                    <p className="text-lg font-display font-medium">Selecione um Mês de Referência</p>
                     <p className="text-sm opacity-70">Para carregar a análise operacional detalhada, escolha um mês no filtro acima.</p>
                 </div>
              ) : (
@@ -1151,12 +1258,12 @@ function App() {
         </div>
       )}
 
-      {/* ABA CARTEIRA (MANTIDA IGUAL) */}
+      {/* ABA CARTEIRA */}
       {currentTab === 'carteira' && (
         <div className="animate-in fade-in zoom-in duration-300">
             <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden">
                 <div className="p-6 border-b border-slate-800 bg-slate-900/50">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><Briefcase className="text-blue-500" size={24}/> Carteira de Clientes</h2>
+                    <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><Briefcase className="text-blue-500" size={24}/> Carteira de Clientes</h2>
                     <p className="text-sm text-slate-400">Visão consolidada por Canal e Concessionária (Base Total RD Station)</p>
                 </div>
                 
@@ -1164,12 +1271,12 @@ function App() {
                     <table className="w-full text-xs text-left border-collapse border border-slate-700">
                         <thead>
                             <tr className="bg-blue-900 text-white">
-                                <th rowSpan={2} className="p-3 border border-slate-700 text-center uppercase font-bold w-32">Canal</th>
-                                <th rowSpan={2} className="p-3 border border-slate-700 text-center uppercase font-bold w-48">Etapa</th>
+                                <th rowSpan={2} className="p-3 border border-slate-700 text-center font-display uppercase font-bold w-32">Canal</th>
+                                <th rowSpan={2} className="p-3 border border-slate-700 text-center font-display uppercase font-bold w-48">Etapa</th>
                                 {portfolioData.allConcessionarias.map((conc: string) => (
                                     <th key={conc} colSpan={2} className="p-2 border border-slate-700 text-center font-bold">{conc}</th>
                                 ))}
-                                <th colSpan={2} className="p-2 border border-slate-700 text-center font-bold bg-slate-800">TOTAL</th>
+                                <th colSpan={2} className="p-2 border border-slate-700 text-center font-display font-bold bg-slate-800">TOTAL</th>
                             </tr>
                             <tr className="bg-blue-950 text-slate-300">
                                 {portfolioData.allConcessionarias.map((conc: string) => (
@@ -1188,7 +1295,6 @@ function App() {
                                 
                                 return (
                                     <>
-                                        {/* LINHAS DE ETAPAS */}
                                         {etapas.map((etapa, etapaIdx) => {
                                             const rowData = portfolioData.matrix[area][etapa].rows;
                                             const totalRow = portfolioData.matrix[area][etapa].totalRow;
@@ -1197,7 +1303,7 @@ function App() {
                                             return (
                                                 <tr key={`${area}-${etapa}`} className={`hover:bg-slate-700/30 transition-colors border-b border-slate-800 ${bgClass}`}>
                                                     {etapaIdx === 0 && (
-                                                        <td rowSpan={etapas.length + 1} className="p-3 border border-slate-700 font-extrabold text-center align-middle text-white uppercase tracking-wider text-[10px]">
+                                                        <td rowSpan={etapas.length + 1} className="p-3 border border-slate-700 font-extrabold font-display text-center align-middle text-white uppercase tracking-wider text-[10px]">
                                                             {area}
                                                         </td>
                                                     )}
@@ -1227,9 +1333,8 @@ function App() {
                                             );
                                         })}
 
-                                        {/* NOVA LINHA DE SUBTOTAL POR ÁREA (CANAL) */}
                                         <tr key={`${area}-subtotal`} className="bg-blue-900/20 border-y-2 border-slate-600 font-bold">
-                                            <td className="p-2 border border-slate-700 text-right uppercase text-[10px] tracking-wider text-blue-300">Total {area}</td>
+                                            <td className="p-2 border border-slate-700 text-right font-display uppercase text-[10px] tracking-wider text-blue-300">Total {area}</td>
                                             {portfolioData.allConcessionarias.map((conc: string) => {
                                                 const subData = portfolioData.areaTotals[area]?.rows[conc] || { ucs: 0, mwh: 0 };
                                                 return (
@@ -1254,9 +1359,8 @@ function App() {
                                 );
                             })}
                             
-                            {/* TOTAL GERAL FINAL */}
                             <tr className="bg-slate-800 font-black border-t-4 border-slate-500 shadow-xl">
-                                <td colSpan={2} className="p-4 border border-slate-700 text-right uppercase tracking-widest text-lg text-white">TOTAL GERAL DA CARTEIRA</td>
+                                <td colSpan={2} className="p-4 border border-slate-700 font-display text-right uppercase tracking-widest text-lg text-white">TOTAL GERAL DA CARTEIRA</td>
                                 {portfolioData.allConcessionarias.map((conc: string) => (
                                     <>
                                         <td key={`${conc}-tot-ucs`} className="p-2 border border-slate-700 text-center text-white text-sm">
@@ -1281,7 +1385,7 @@ function App() {
         </div>
       )}
 
-      {/* --- ABA CRM (MANTIDA IGUAL) --- */}
+      {/* --- ABA CRM --- */}
       {currentTab === 'crm' && (
         <div className="animate-in fade-in zoom-in duration-300 flex flex-col gap-6">
             {crmProcessed.stats && (
@@ -1289,13 +1393,13 @@ function App() {
                 <div className="bg-gradient-to-r from-blue-900/40 to-slate-900 border border-blue-800/50 rounded-2xl p-6 flex items-center gap-8 shadow-lg">
                     <div className="bg-blue-600 p-4 rounded-full shadow-lg shadow-blue-500/20"><Users size={32} className="text-white"/></div>
                     <div>
-                        <p className="text-sm font-bold text-blue-300 uppercase tracking-wider">Total CRM</p>
-                        <h2 className="text-4xl font-extrabold text-white mt-1">{crmProcessed.stats.totalUCs} <span className="text-lg font-medium text-slate-400">UCs</span></h2>
+                        <p className="text-sm font-bold font-display text-blue-300 uppercase tracking-wider">Total CRM</p>
+                        <h2 className="text-4xl font-display font-extrabold text-white mt-1">{crmProcessed.stats.totalUCs} <span className="text-lg font-medium text-slate-400">UCs</span></h2>
                     </div>
                     <div className="h-12 w-px bg-blue-800/50 mx-4"></div>
                     <div>
-                        <p className="text-sm font-bold text-blue-300 uppercase tracking-wider">Energia Total</p>
-                        <h2 className="text-4xl font-extrabold text-white mt-1 flex items-center gap-2">
+                        <p className="text-sm font-bold font-display text-blue-300 uppercase tracking-wider">Energia Total</p>
+                        <h2 className="text-4xl font-display font-extrabold text-white mt-1 flex items-center gap-2">
                              {new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(crmProcessed.stats.totalMwh)} 
                              <span className="text-lg font-medium text-slate-400">MWh</span>
                         </h2>
@@ -1303,7 +1407,7 @@ function App() {
                 </div>
 
                 <div>
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Briefcase size={14}/> Por Área de Gestão</h3>
+                    <h3 className="text-xs font-bold font-display text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Briefcase size={14}/> Por Área de Gestão</h3>
                     <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/50">
                         {Object.entries(crmProcessed.stats.byArea).map(([key, val]: any) => (
                             <CrmKpiCard key={key} title={key} count={val.count} mwh={val.mwh} color="blue" />
@@ -1312,7 +1416,7 @@ function App() {
                 </div>
 
                  <div>
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><TrendingUp size={14}/> Por Etapa do Funil</h3>
+                    <h3 className="text-xs font-bold font-display text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><TrendingUp size={14}/> Por Etapa do Funil</h3>
                     <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/50">
                         {crmProcessed.options.etapas.filter(k => k !== 'Todas').map((key: string) => {
                             const val = crmProcessed.stats.byEtapa[key];
@@ -1412,7 +1516,7 @@ function App() {
                         </tbody>
                         <tfoot className="sticky bottom-0 bg-slate-900 border-t border-slate-700 font-bold text-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] z-10">
                             <tr>
-                                <td colSpan={6} className="px-6 py-3 text-right uppercase text-xs tracking-wider text-slate-500">Total Filtrado</td>
+                                <td colSpan={6} className="px-6 py-3 text-right font-display uppercase text-xs tracking-wider text-slate-500">Total Filtrado</td>
                                 <td className="px-6 py-3 text-right text-yellow-400 font-mono border-l border-slate-700 text-lg">
                                     {crmProcessed.stats ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(crmProcessed.stats.totalMwh) : 0}
                                 </td>
@@ -1424,13 +1528,11 @@ function App() {
         </div>
       )}
 
-      {/* --- ABA LOCALIZAÇÃO (MANTIDA IGUAL) --- */}
+      {/* --- ABA LOCALIZAÇÃO --- */}
       {currentTab === 'localizacao' && (
         <div className="animate-in fade-in zoom-in duration-300 h-[calc(100vh-200px)] flex flex-col">
-            
-            {/* Toolbar de Filtros (Reaproveitada do CRM para o Mapa responder aos filtros) */}
             <div className="bg-slate-900 p-4 rounded-t-2xl border border-slate-800 border-b-0 flex flex-wrap gap-3 items-center z-10">
-                <span className="text-sm font-bold text-slate-400 mr-2 flex items-center gap-2"><Filter size={16}/> Filtros do Mapa:</span>
+                <span className="text-sm font-bold font-display text-slate-400 mr-2 flex items-center gap-2"><Filter size={16}/> Filtros do Mapa:</span>
                 <MultiSelect 
                     options={crmProcessed.options.concessionarias.filter(o => o !== 'Todas')} 
                     selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Concessionárias" 
@@ -1448,7 +1550,6 @@ function App() {
                 </div>
             </div>
 
-            {/* Container do Mapa */}
             <div className="bg-slate-900 flex-1 rounded-b-2xl border border-slate-800 shadow-lg overflow-hidden relative">
                <ClientMap clients={crmProcessed.filtered} />
             </div>
