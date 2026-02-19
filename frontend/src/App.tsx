@@ -41,13 +41,21 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
         const points: any[] = [];
         let validos = 0;
         
+        // Log para debug: Vamos "espiar" a estrutura do primeiro cliente que chega aqui
+        if (clients.length > 0) {
+            console.log("[DEBUG MAPA] Primeiro cliente recebido:", clients[0]);
+        }
+        
         clients.forEach(c => {
             // Só adiciona se tiver latitude e longitude vindas do banco
             if (c.latitude && c.longitude) {
                 validos++;
-                // Adiciona um micro-deslocamento (jitter) para pontos no mesmo endereço não se sobreporem totalmente
+                // Adiciona um micro-deslocamento (jitter)
                 const lat = Number(c.latitude) + (Math.random() - 0.5) * 0.0002;
                 const lng = Number(c.longitude) + (Math.random() - 0.5) * 0.0002;
+                
+                // Tenta capturar o ID de várias formas (maiúsculo, minúsculo, inglês, etc)
+                const idNegocioEncontrado = c.id_negocio || c.ID_NEGOCIO || c.deal_id || c.id_rd || null;
                 
                 points.push({
                     id: c.uc || Math.random(),
@@ -57,10 +65,11 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                     city: c.cidade || 'Desconhecido',
                     uf: c.uf || '',
                     mwh: Number(c.consumo_medio_mwh) || 0,
-                    dealId: c.id_negocio || null // <-- Capturando o ID do Negócio do BD
+                    dealId: idNegocioEncontrado
                 });
             }
         });
+        
         console.log(`[MAPA] Renderizando ${validos} pontos válidos do banco.`);
         return points;
     }, [clients]);
