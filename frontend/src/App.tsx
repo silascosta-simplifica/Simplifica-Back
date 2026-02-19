@@ -5,25 +5,22 @@ import {
   Area, ComposedChart, Bar
 } from 'recharts';
 import { 
-  Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart
+  LayoutDashboard, Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ArrowDown, ShieldAlert, ClipboardList, ExternalLink
 } from 'lucide-react';
 import { 
   subMonths, isAfter, isBefore, startOfMonth, endOfMonth, format, 
-  addMonths, eachDayOfInterval, isSameDay, isWithinInterval, startOfDay 
+  addMonths, eachDayOfInterval, isSameDay, isWithinInterval, startOfDay, differenceInDays 
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// --- IMPORTAÇÕES DO MAPA ---
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Correção de ícones do Leaflet
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
-// Fix para ícones sumindo
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: markerIcon2x,
@@ -33,30 +30,19 @@ L.Icon.Default.mergeOptions({
 
 // --- COMPONENTES AUXILIARES ---
 
-// 1. Mapa de Clientes (VERSÃO FINAL - LEITURA DIRETA DO BANCO)
 const ClientMap = ({ clients }: { clients: any[] }) => {
-    
-    // Processa os pontos instantaneamente (sem fetch)
     const locations = useMemo(() => {
         const points: any[] = [];
         let validos = 0;
         
-        // Log para debug: Vamos "espiar" a estrutura do primeiro cliente que chega aqui
-        if (clients.length > 0) {
-            console.log("[DEBUG MAPA] Primeiro cliente recebido:", clients[0]);
-        }
-        
         clients.forEach(c => {
-            // Só adiciona se tiver latitude e longitude vindas do banco
             if (c.latitude && c.longitude) {
                 validos++;
-                // Adiciona um micro-deslocamento (jitter)
                 const lat = Number(c.latitude) + (Math.random() - 0.5) * 0.0002;
                 const lng = Number(c.longitude) + (Math.random() - 0.5) * 0.0002;
                 
-                // Tenta capturar o ID de várias formas (maiúsculo, minúsculo, inglês, etc)
                 const idNegocioEncontrado = c.id_negocio || c.ID_NEGOCIO || c.deal_id || c.id_rd || null;
-                
+
                 points.push({
                     id: c.uc || Math.random(),
                     lat: lat,
@@ -69,12 +55,9 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                 });
             }
         });
-        
-        console.log(`[MAPA] Renderizando ${validos} pontos válidos do banco.`);
         return points;
     }, [clients]);
 
-    // Estado Inicial (Sem dados geográficos)
     if (locations.length === 0) {
         return (
             <div className="h-full w-full flex flex-col items-center justify-center bg-slate-900 text-center p-6 relative z-10">
@@ -85,9 +68,6 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                 <p className="text-slate-400 mb-4 max-w-md">
                    Nenhum cliente na lista atual possui coordenadas cadastradas no banco de dados.
                 </p>
-                <div className="text-xs text-slate-500 bg-slate-800 p-3 rounded border border-slate-700">
-                    Dica: Verifique se o script <code>popula_ceps.mjs</code> rodou corretamente e se a View do banco foi atualizada.
-                </div>
             </div>
         );
     }
@@ -98,7 +78,7 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                 center={[-15.79, -47.88]} 
                 zoom={4} 
                 style={{ height: '100%', width: '100%' }}
-                preferCanvas={true} // Melhora performance com muitos pontos
+                preferCanvas={true}
             >
                 <TileLayer
                     attribution='&copy; OpenStreetMap'
@@ -110,7 +90,6 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                             <div className="p-1 min-w-[150px]">
                                 <h4 className="font-bold font-display text-slate-800 text-sm mb-1 border-b pb-1">{loc.city}-{loc.uf}</h4>
                                 <div className="text-xs text-slate-600 mt-1">
-                                    {/* Link Dinâmico para o RD Station CRM */}
                                     {loc.dealId ? (
                                         <a 
                                             href={`https://crm.rdstation.com/app/deals/${loc.dealId}`} 
@@ -124,8 +103,6 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                                     ) : (
                                         <p className="truncate font-medium text-slate-800 mb-1">{loc.name}</p>
                                     )}
-                                    
-                                    {/* Exibição em kWh formatado */}
                                     <p className="mt-1">
                                         Consumo: <span className="font-bold text-emerald-600">{new Intl.NumberFormat('pt-BR').format(Math.round(loc.mwh * 1000))} kWh</span>
                                     </p>
@@ -193,7 +170,7 @@ const DateRangePicker = ({ onChange, selectedRange }: any) => {
         <div className="relative" ref={containerRef}>
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className={`min-w-[180px] bg-slate-800 border ${isOpen || selectedRange.from ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700'} rounded-lg px-3 py-2 text-sm text-white outline-none flex items-center justify-between transition-all hover:bg-slate-700`}
+                className={`min-w-[180px] w-full bg-slate-800 border ${isOpen || selectedRange.from ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700'} rounded-lg px-3 py-2.5 text-sm text-white outline-none flex items-center justify-between transition-all hover:bg-slate-700`}
             >
                 <div className="flex items-center gap-2">
                     <CalendarIcon size={14} className={selectedRange.from ? "text-blue-400" : "text-slate-400"} />
@@ -250,7 +227,7 @@ const DateRangePicker = ({ onChange, selectedRange }: any) => {
     );
 };
 
-const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon }: any) => {
+const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon, fullWidth = false }: any) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -279,10 +256,10 @@ const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon }: a
             : `${selected.length} selecionados`;
 
     return (
-        <div className="relative" ref={containerRef}>
+        <div className={`relative ${fullWidth ? 'w-full' : ''}`} ref={containerRef}>
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full md:w-48 bg-slate-800 border ${isOpen ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700'} rounded-lg px-3 py-2 text-sm text-white outline-none flex items-center justify-between transition-all hover:bg-slate-700`}
+                className={`bg-slate-800 border ${isOpen ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700'} rounded-lg px-3 py-2.5 text-sm text-white outline-none flex items-center justify-between transition-all hover:bg-slate-700 ${fullWidth ? 'w-full' : 'w-full md:w-48'}`}
             >
                 <div className="flex items-center gap-2 truncate">
                     {Icon && <Icon size={14} className="text-slate-400 shrink-0" />}
@@ -294,7 +271,7 @@ const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon }: a
             </button>
 
             {isOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 max-h-64 overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 p-1">
+                <div className="absolute top-full left-0 mt-2 w-full min-w-[220px] max-h-64 overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 p-1">
                      <div 
                         className="px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-800 rounded cursor-pointer flex items-center gap-2 font-medium mb-1 border-b border-slate-800"
                         onClick={() => onChange(selected.length > 0 ? [] : options)}
@@ -307,10 +284,10 @@ const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon }: a
                             onClick={() => toggleOption(opt)}
                             className="flex items-center gap-2 px-2 py-2 hover:bg-slate-800 rounded cursor-pointer group"
                         >
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.includes(opt) ? 'bg-blue-600 border-blue-600' : 'border-slate-600 group-hover:border-slate-500'}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${selected.includes(opt) ? 'bg-blue-600 border-blue-600' : 'border-slate-600 group-hover:border-slate-500'}`}>
                                 {selected.includes(opt) && <Check size={10} className="text-white" />}
                             </div>
-                            <span className={`text-sm ${selected.includes(opt) ? 'text-white font-medium' : 'text-slate-400'}`}>{opt}</span>
+                            <span className={`text-sm break-words ${selected.includes(opt) ? 'text-white font-medium' : 'text-slate-400'}`}>{opt}</span>
                         </div>
                     ))}
                 </div>
@@ -389,6 +366,27 @@ const FinancialTable = ({ title, data, colorClass, totalValue, totalCompensated,
   </div>
 );
 
+// Componente Genérico de Paginação
+const Pagination = ({ page, totalPages, setPage, totalItems }: { page: number, totalPages: number, setPage: (p: number) => void, totalItems: number }) => (
+    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-4 bg-slate-900 border-t border-slate-800 text-sm text-slate-400">
+      <div>
+        Exibindo página <span className="font-bold text-white">{totalPages > 0 ? page : 0}</span> de <span className="font-bold text-white">{totalPages}</span> ({totalItems} registros)
+      </div>
+      <div className="flex gap-2">
+        <button 
+          onClick={() => setPage(page - 1)} 
+          disabled={page <= 1}
+          className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 text-white"
+        ><ChevronLeft size={14}/> Anterior</button>
+        <button 
+          onClick={() => setPage(page + 1)} 
+          disabled={page >= totalPages || totalPages === 0}
+          className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 text-white"
+        >Próxima <ChevronRight size={14}/></button>
+      </div>
+    </div>
+);
+
 const CustomTooltipEvolucao = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         return (
@@ -425,7 +423,7 @@ const CustomTooltipEvolucao = ({ active, payload, label }: any) => {
 function App() {
   const { data: rawData, crmData, loading, refreshSnapshot, refreshing } = useAnalytics();
   
-  const [currentTab, setCurrentTab] = useState<'geral' | 'financeiro' | 'operacional' | 'carteira' | 'crm' | 'localizacao'>('geral');
+  const [currentTab, setCurrentTab] = useState<'geral' | 'financeiro' | 'emissao' | 'carteira' | 'crm' | 'auditoria' | 'localizacao'>('geral');
   
   const [selectedConcessionaria, setSelectedConcessionaria] = useState('Todas');
   const [selectedMesRef, setSelectedMesRef] = useState(() => {
@@ -435,16 +433,33 @@ function App() {
   const [selectedArea, setSelectedArea] = useState('Todas');
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
 
+  // Filtros Emissão
   const [searchText, setSearchText] = useState('');
   const [opFilterStatus, setOpFilterStatus] = useState('Todos'); 
   const [opFilterEtapa, setOpFilterEtapa] = useState('Todas'); 
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null); 
+  const [emissaoPage, setEmissaoPage] = useState(1);
 
+  // Filtros CRM
   const [crmSearch, setCrmSearch] = useState('');
   const [crmFilterConcessionaria, setCrmFilterConcessionaria] = useState<string[]>([]);
   const [crmFilterArea, setCrmFilterArea] = useState<string[]>([]);
   const [crmFilterEtapa, setCrmFilterEtapa] = useState<string[]>([]);
   const [crmFilterStatus, setCrmFilterStatus] = useState<string[]>([]);
+  const [crmPage, setCrmPage] = useState(1);
+
+  // Filtros Auditoria
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditFilterEtapa, setAuditFilterEtapa] = useState<string[]>([]);
+  const [auditFilterInconsistencia, setAuditFilterInconsistencia] = useState<string[]>([]);
+  const [auditPage, setAuditPage] = useState(1);
+
+  const ITEMS_PER_PAGE = 20;
+
+  // Reset de páginas quando filtros mudam
+  useEffect(() => { setEmissaoPage(1); }, [searchText, opFilterStatus, opFilterEtapa, selectedMesRef, selectedConcessionaria, selectedArea, dateRange]);
+  useEffect(() => { setAuditPage(1); }, [auditSearch, auditFilterEtapa, auditFilterInconsistencia, selectedConcessionaria, selectedArea]);
+  useEffect(() => { setCrmPage(1); }, [crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus, selectedConcessionaria, selectedArea]);
 
   const data = useMemo(() => {
     if (!rawData) return [];
@@ -636,6 +651,125 @@ function App() {
 
     return { totalUCs, totalRevenue, totalEnergy, avgTicket };
   }, [filteredData, macroMetrics]);
+
+  const globalJourney = useMemo(() => {
+    let sumGanhoProt = 0, countGanhoProt = 0;
+    let sumProtEcon = 0, countProtEcon = 0;
+    let sumEconFat = 0, countEconFat = 0;
+
+    crmData.forEach(d => {
+        const matchConc = selectedConcessionaria === 'Todas' || (d.concessionaria || 'Outra') === selectedConcessionaria;
+        const matchArea = selectedArea === 'Todas' || (d.area_de_gestao || 'Outros') === selectedArea;
+        if (!matchConc || !matchArea) return;
+
+        const dtGanho = parseBrDate(d.data_ganho);
+        const dtProt = parseBrDate(d.data_protocolo);
+        const dtEcon = parseBrDate(d.data_primeira_economia);
+        const dtFat = parseBrDate(d.data_primeira_fatura);
+
+        if (dtGanho && dtProt && (isAfter(dtProt, dtGanho) || isSameDay(dtProt, dtGanho))) {
+            sumGanhoProt += differenceInDays(dtProt, dtGanho);
+            countGanhoProt++;
+        }
+        if (dtProt && dtEcon && (isAfter(dtEcon, dtProt) || isSameDay(dtEcon, dtProt))) {
+            sumProtEcon += differenceInDays(dtEcon, dtProt);
+            countProtEcon++;
+        }
+        if (dtEcon && dtFat && (isAfter(dtFat, dtEcon) || isSameDay(dtFat, dtEcon))) {
+            sumEconFat += differenceInDays(dtFat, dtEcon);
+            countEconFat++;
+        }
+    });
+
+    return {
+        ganhoProt: countGanhoProt > 0 ? Math.round(sumGanhoProt / countGanhoProt) : 0,
+        protEcon: countProtEcon > 0 ? Math.round(sumProtEcon / countProtEcon) : 0,
+        econFat: countEconFat > 0 ? Math.round(sumEconFat / countEconFat) : 0
+    };
+  }, [crmData, selectedConcessionaria, selectedArea]);
+
+  // --- LÓGICA DA AUDITORIA (Com filtros combinados) ---
+  const auditData = useMemo(() => {
+      const issuesAll: any[] = [];
+      let stats = {
+          totalAnalisados: 0,
+          percIntegridade: 0
+      };
+
+      // Extração baseada nos filtros Globais
+      crmData.forEach(item => {
+          const matchConc = selectedConcessionaria === 'Todas' || (item.concessionaria || 'Outra') === selectedConcessionaria;
+          const matchArea = selectedArea === 'Todas' || (item.area_de_gestao || 'Outros') === selectedArea;
+          if(!matchConc || !matchArea) return;
+
+          stats.totalAnalisados++;
+
+          const obj = item.objetivo_etapa || '';
+          const status = item.status_rd || '';
+          const missingFields: string[] = [];
+
+          const checkEmpty = (val: any) => !val || String(val).trim() === '' || String(val).toLowerCase() === 'null';
+
+          if (obj.includes('Protocolados')) {
+              if(checkEmpty(item.data_protocolo)) missingFields.push('Data do 1º protocolo');
+              if(checkEmpty(item.usina_alocada)) missingFields.push('Usina Alocada');
+          }
+
+          if (obj.includes('Operacional')) {
+              if(checkEmpty(item.data_protocolo)) missingFields.push('Data do 1º protocolo');
+              if(checkEmpty(item.usina_alocada)) missingFields.push('Usina Alocada');
+              if(checkEmpty(item.data_primeira_economia)) missingFields.push('Data de 1ª Economia da UC');
+              if(checkEmpty(item.data_primeira_fatura)) missingFields.push('Data da 1ª fatura');
+          }
+
+          if (obj.includes('Em Exclusão') || obj.includes('Excluído')) {
+              if(checkEmpty(item.data_cancelamento)) missingFields.push('Data de pedido de cancelamento');
+              if(checkEmpty(item.motivo_cancelamento)) missingFields.push('Motivo do cancelamento');
+          }
+
+          if (obj.includes('Excluído')) {
+              if(checkEmpty(item.data_ultimo_faturamento)) missingFields.push('Data do último faturamento');
+          }
+
+          if (status === 'Stand-by') {
+              if(checkEmpty(item.monitoramento_operacao)) missingFields.push('Monitoramento - Operação');
+          }
+
+          if (missingFields.length > 0) {
+              const idNegocioEncontrado = item.id_negocio || item.ID_NEGOCIO || item.deal_id || item.id_rd || null;
+              issuesAll.push({
+                  ...item,
+                  missingFields,
+                  rdLink: idNegocioEncontrado ? `https://crm.rdstation.com/app/deals/${idNegocioEncontrado}` : null
+              });
+          }
+      });
+
+      if (stats.totalAnalisados > 0) {
+          stats.percIntegridade = Math.round(((stats.totalAnalisados - issuesAll.length) / stats.totalAnalisados) * 100);
+      }
+
+      // Opções únicas para os dropdowns locais
+      const uniqueEtapas = Array.from(new Set(issuesAll.map(i => i.objetivo_etapa || 'Sem Etapa'))).sort();
+      const uniqueInconsistencias = Array.from(new Set(issuesAll.flatMap(i => i.missingFields))).sort();
+
+      // Aplicação dos filtros Locais
+      const filteredIssues = issuesAll.filter(item => {
+          const s = auditSearch.toLowerCase();
+          const matchSearch = !s || item.uc?.toLowerCase().includes(s) || item.nome_negocio?.toLowerCase().includes(s);
+          
+          const matchEtapa = auditFilterEtapa.length === 0 || auditFilterEtapa.includes(item.objetivo_etapa || 'Sem Etapa');
+          const matchInconsistencia = auditFilterInconsistencia.length === 0 || item.missingFields.some((f: string) => auditFilterInconsistencia.includes(f));
+
+          return matchSearch && matchEtapa && matchInconsistencia;
+      });
+
+      return { 
+          issues: filteredIssues, 
+          stats, 
+          options: { etapas: uniqueEtapas, inconsistencias: uniqueInconsistencias } 
+      };
+  }, [crmData, selectedConcessionaria, selectedArea, auditSearch, auditFilterEtapa, auditFilterInconsistencia]);
 
   const chartData = useMemo(() => {
     const endDate = selectedMesRef === 'Todos' ? new Date() : endOfMonth(parseRefMonth(selectedMesRef));
@@ -854,12 +988,16 @@ function App() {
         const s = crmSearch.toLowerCase();
         const matchSearch = !s || (item.uc && item.uc.toLowerCase().includes(s)) || (item.nome_negocio && item.nome_negocio.toLowerCase().includes(s));
         
+        // CRM aplica tanto os filtros globais (topo) quanto os locais (seus próprios dropdowns)
+        const matchConcGlob = selectedConcessionaria === 'Todas' || (item.concessionaria || 'Outra') === selectedConcessionaria;
+        const matchAreaGlob = selectedArea === 'Todas' || (item.area_de_gestao || 'Outros') === selectedArea;
+
         const matchConc = crmFilterConcessionaria.length === 0 || crmFilterConcessionaria.includes(item.concessionaria || 'Outra');
         const matchArea = crmFilterArea.length === 0 || crmFilterArea.includes(item.area_de_gestao || 'Outros');
         const matchEtapa = crmFilterEtapa.length === 0 || crmFilterEtapa.includes(item.objetivo_etapa || 'Sem Etapa');
         const matchStatus = crmFilterStatus.length === 0 || crmFilterStatus.includes(item.status_rd || 'Sem Status');
         
-        return matchSearch && matchConc && matchArea && matchEtapa && matchStatus;
+        return matchSearch && matchConcGlob && matchAreaGlob && matchConc && matchArea && matchEtapa && matchStatus;
     });
 
     const sumMwh = (arr: any[]) => arr.reduce((acc, curr) => acc + (Number(curr.consumo_medio_mwh) || 0), 0);
@@ -884,7 +1022,7 @@ function App() {
     };
 
     return { filtered, stats, options: { concessionarias: concessionariasRaw, areas: areasRaw, etapas: etapasSorted, status: statusRaw } };
-  }, [crmData, crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus]);
+  }, [crmData, crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus, selectedConcessionaria, selectedArea]);
 
   const financialGroups = useMemo(() => {
     const normalize = (st: string) => (st || '').toUpperCase();
@@ -931,11 +1069,29 @@ function App() {
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-if (loading) {
+  const downloadAuditCSV = (rows: any[], filename: string) => {
+    if (!rows.length) return;
+    const usefulRows = rows.map(r => ({
+        UC: r.uc,
+        Nome: r.nome_negocio || r.nome,
+        Concessionaria: r.concessionaria || '-',
+        Area: r.area_de_gestao || '-',
+        Etapa: r.objetivo_etapa || '-',
+        Status: r.status_rd || '-',
+        Inconsistencias: r.missingFields.join(', ')
+    }));
+    const headers = Object.keys(usefulRows[0]).join(';');
+    const csvContent = usefulRows.map(row => Object.values(row).map(v => `"${v}"`).join(';')).join('\n');
+    const blob = new Blob([`\uFEFF${headers}\n${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.setAttribute('download', `${filename}.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  if (loading) {
     return (
       <div className="flex flex-col h-screen items-center justify-center bg-slate-950 text-white p-6 relative overflow-hidden">
-        
-        {/* MARCA D'ÁGUA GIGANTE NO FUNDO */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full flex items-center justify-center opacity-[0.03] pointer-events-none">
            <img 
               src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" 
@@ -944,20 +1100,15 @@ if (loading) {
            />
         </div>
 
-        {/* Efeito de luz suave (usando a cor verde da sua paleta) */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none"></div>
         
-        {/* CONTEÚDO CENTRAL */}
         <div className="relative z-10 flex flex-col items-center animate-in fade-in zoom-in duration-700">
-          {/* Logo Principal (Sem bordas e sem fundo branco) */}
           <img 
             src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" 
             alt="Simplifica Energia" 
             className="w-full max-w-[280px] object-contain mb-10 drop-shadow-[0_0_15px_rgba(255,255,255,0.05)]"
           />
-          
           <Loader2 className="animate-spin h-10 w-10 text-blue-500 mb-6" />
-          
           <div className="text-center">
               <h2 className="text-2xl font-bold font-display text-white tracking-wide">Bem-vindo(a)!</h2>
               <p className="text-sm text-slate-400 mt-2 font-medium">Aguarde enquanto sincronizamos o seu dashboard...</p>
@@ -966,19 +1117,29 @@ if (loading) {
       </div>
     );
   }
+
+  // --- DADOS PAGINADOS ---
+  const paginatedEmissaoData = operationalData.slice((emissaoPage - 1) * ITEMS_PER_PAGE, emissaoPage * ITEMS_PER_PAGE);
+  const totalEmissaoPages = Math.ceil(operationalData.length / ITEMS_PER_PAGE);
+  const totalEmissaoEstimado = operationalData.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0);
+  const totalEmissaoRealizado = operationalData.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0);
+
+  const paginatedAuditData = auditData.issues.slice((auditPage - 1) * ITEMS_PER_PAGE, auditPage * ITEMS_PER_PAGE);
+  const totalAuditPages = Math.ceil(auditData.issues.length / ITEMS_PER_PAGE);
+
+  const paginatedCrmData = crmProcessed.filtered.slice((crmPage - 1) * ITEMS_PER_PAGE, crmPage * ITEMS_PER_PAGE);
+  const totalCrmPages = Math.ceil(crmProcessed.filtered.length / ITEMS_PER_PAGE);
+
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans p-6 pb-20">
       {/* HEADER */}
       <header className="flex flex-col md:flex-row items-center justify-between mb-8 border-b border-slate-800 pb-6 gap-6">
         <div className="flex items-center gap-4">
-          
-          {/* NOVA LOGO AQUI */}
           <img 
-             src="https://media.licdn.com/dms/image/v2/D4E0BAQH3m3B1igUKyg/company-logo_200_200/company-logo_200_200/0/1734467902204/simplifica_energia_logo?e=2147483647&v=beta&t=eE-Hec5Jt2I6UxmI2TGJav0ErDRxQZJF6XyjIef5914" 
+             src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" 
              alt="Logo Simplifica Energia" 
-             className="w-14 h-14 rounded-xl shadow-lg object-contain bg-white"
+             className="h-10 w-auto object-contain"
           />
-
           <div>
             <div className="flex items-center gap-3">
                 <h1 className="text-3xl font-bold font-display text-white tracking-tight">Dashboard de Gestão</h1>
@@ -997,39 +1158,99 @@ if (loading) {
         <div className="flex bg-slate-900 p-1.5 rounded-xl border border-slate-800 overflow-x-auto max-w-full">
             <button onClick={() => setCurrentTab('geral')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'geral' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Activity size={18}/> Visão Geral</button>
             <button onClick={() => setCurrentTab('financeiro')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'financeiro' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><DollarSign size={18}/> Financeiro</button>
-            <button onClick={() => setCurrentTab('operacional')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'operacional' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><CalendarIcon size={18}/> Operacional</button>
+            <button onClick={() => setCurrentTab('emissao')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'emissao' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><CalendarIcon size={18}/> Emissão</button>
             <button onClick={() => setCurrentTab('carteira')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'carteira' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Briefcase size={18}/> Carteira</button>
             <button onClick={() => setCurrentTab('crm')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'crm' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={18}/> CRM</button>
+            <button onClick={() => setCurrentTab('auditoria')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'auditoria' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><ShieldAlert size={18}/> Auditoria</button>
             <button onClick={() => setCurrentTab('localizacao')} className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${currentTab === 'localizacao' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><MapPin size={18}/> Localização</button>
         </div>
       </header>
 
-      {/* FILTROS GLOBAIS */}
-      {currentTab !== 'carteira' && currentTab !== 'crm' && currentTab !== 'localizacao' && (
-      <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm animate-in fade-in zoom-in duration-300">
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
-          <div className="relative"><select value={selectedConcessionaria} onChange={e => setSelectedConcessionaria(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueConcessionarias.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
-          <div className="relative"><select value={selectedArea} onChange={e => setSelectedArea(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueAreas.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Mês Referência</label>
-          <div className="relative"><select value={selectedMesRef} onChange={e => setSelectedMesRef(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueMesesRef.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-        </div>
-        <div className="flex flex-col gap-2">
-            <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><CalendarIcon size={12}/> Período de Emissão Prevista</label>
-            <DateRangePicker selectedRange={dateRange} onChange={setDateRange} />
-        </div>
-      </section>
+      {/* --- FILTROS NO TOPO UNIFICADOS --- */}
+      {(currentTab === 'geral' || currentTab === 'financeiro' || currentTab === 'emissao' || currentTab === 'auditoria' || currentTab === 'crm') && (
+        <section className={`grid gap-4 mb-8 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm animate-in fade-in zoom-in duration-300 
+            ${currentTab === 'crm' || currentTab === 'auditoria' ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-4'}`}>
+            
+            {/* Filtros Base (Sempre presentes exceto CRM que tem os próprios MultiSelects) */}
+            {currentTab !== 'crm' && (
+                <>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
+                        <div className="relative"><select value={selectedConcessionaria} onChange={e => setSelectedConcessionaria(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueConcessionarias.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
+                        <div className="relative"><select value={selectedArea} onChange={e => setSelectedArea(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueAreas.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    </div>
+                </>
+            )}
+
+            {/* Filtros de Data (Apenas Geral, Financeiro, Emissão) */}
+            {(currentTab === 'geral' || currentTab === 'financeiro' || currentTab === 'emissao') && (
+                <>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Mês Referência</label>
+                        <div className="relative"><select value={selectedMesRef} onChange={e => setSelectedMesRef(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueMesesRef.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><CalendarIcon size={12}/> Período de Emissão Prevista</label>
+                        <DateRangePicker selectedRange={dateRange} onChange={setDateRange} />
+                    </div>
+                </>
+            )}
+
+            {/* Filtros Auditoria no Topo */}
+            {currentTab === 'auditoria' && (
+                <>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Search size={12}/> Buscar UC/Negócio</label>
+                        <input type="text" value={auditSearch} onChange={e => setAuditSearch(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600" placeholder="Buscar..."/>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Status/Etapa</label>
+                        <MultiSelect fullWidth options={auditData.options.etapas} selected={auditFilterEtapa} onChange={setAuditFilterEtapa} placeholder="Todas as Etapas" />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Inconsistência</label>
+                        <MultiSelect fullWidth options={auditData.options.inconsistencias} selected={auditFilterInconsistencia} onChange={setAuditFilterInconsistencia} placeholder="Qualquer Inconsistência" />
+                    </div>
+                </>
+            )}
+
+            {/* Filtros CRM no Topo */}
+            {currentTab === 'crm' && (
+                <>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Search size={12}/> Buscar UC/Nome</label>
+                        <div className="relative group w-full">
+                            <Search className="absolute left-3 top-2.5 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={16}/>
+                            <input type="text" placeholder="Buscar..." value={crmSearch} onChange={e => setCrmSearch(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600" />
+                        </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
+                        <MultiSelect options={crmProcessed.options.concessionarias.filter((o: string) => o !== 'Todas')} selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Todas" fullWidth />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
+                        <MultiSelect options={crmProcessed.options.areas.filter((o: string) => o !== 'Todas')} selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Todas" fullWidth />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Etapa</label>
+                        <MultiSelect options={crmProcessed.options.etapas.filter((o: string) => o !== 'Todas')} selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Todas" fullWidth />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Status RD</label>
+                        <MultiSelect options={crmProcessed.options.status.filter((o: string) => o !== 'Todos')} selected={crmFilterStatus} onChange={setCrmFilterStatus} placeholder="Todos" fullWidth />
+                    </div>
+                </>
+            )}
+        </section>
       )}
 
       {/* --- ABA 1: VISÃO GERAL --- */}
       {currentTab === 'geral' && (
           <div className="animate-in fade-in zoom-in duration-300">
-              {/* KPIs de Topo */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                   {[
                       { title: 'Total UCs (Filtro)', value: generalMetrics.totalUCs, sub: 'Unidades Consumidoras', icon: Users, color: 'blue' },
@@ -1046,7 +1267,55 @@ if (loading) {
                   ))}
               </div>
 
-              {/* Gráfico 1: Crescimento MWh */}
+              {globalJourney && (
+                  <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg p-6 flex flex-col relative overflow-hidden mb-8">
+                      <div className="absolute top-0 right-0 p-8 opacity-5"><TrendingUp size={120} /></div>
+                      <h3 className="text-sm font-bold font-display text-slate-400 uppercase tracking-wider mb-6 flex items-center gap-2 relative z-10">
+                          <TrendingUp size={18} className="text-blue-500"/> SLA / Jornada do Cliente (Média de Tempo)
+                      </h3>
+                      
+                      <div className="flex flex-col md:flex-row items-center justify-between w-full relative z-10 gap-2">
+                          <div className="flex flex-col items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
+                              <div className="bg-blue-500/20 p-3 rounded-full mb-3 border border-blue-500/30"><Target size={24} className="text-blue-400"/></div>
+                              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide text-center">Data de Ganho</h4>
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center py-2 md:py-0 md:px-4">
+                              <div className="text-lg font-mono font-bold text-yellow-400 mb-1">{globalJourney.ganhoProt} dias</div>
+                              <ArrowRight className="text-slate-600 hidden md:block" size={24}/>
+                              <ArrowDown className="text-slate-600 block md:hidden" size={24}/>
+                          </div>
+
+                          <div className="flex flex-col items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
+                              <div className="bg-purple-500/20 p-3 rounded-full mb-3 border border-purple-500/30"><FileCheck size={24} className="text-purple-400"/></div>
+                              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide text-center">1º Protocolo</h4>
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center py-2 md:py-0 md:px-4">
+                              <div className="text-lg font-mono font-bold text-yellow-400 mb-1">{globalJourney.protEcon} dias</div>
+                              <ArrowRight className="text-slate-600 hidden md:block" size={24}/>
+                              <ArrowDown className="text-slate-600 block md:hidden" size={24}/>
+                          </div>
+
+                          <div className="flex flex-col items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
+                              <div className="bg-emerald-500/20 p-3 rounded-full mb-3 border border-emerald-500/30"><PiggyBank size={24} className="text-emerald-400"/></div>
+                              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide text-center">1ª Economia</h4>
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center py-2 md:py-0 md:px-4">
+                              <div className="text-lg font-mono font-bold text-yellow-400 mb-1">{globalJourney.econFat} dias</div>
+                              <ArrowRight className="text-slate-600 hidden md:block" size={24}/>
+                              <ArrowDown className="text-slate-600 block md:hidden" size={24}/>
+                          </div>
+
+                          <div className="flex flex-col items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
+                              <div className="bg-rose-500/20 p-3 rounded-full mb-3 border border-rose-500/30"><Receipt size={24} className="text-rose-400"/></div>
+                              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide text-center">Emissão 1ª Fatura</h4>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
               <div className="grid grid-cols-1 gap-6 mb-8">
                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col">
                   <div className="flex justify-between items-center mb-6">
@@ -1075,7 +1344,6 @@ if (loading) {
                 </div>
               </div>
 
-              {/* Gráfico 2: Consumo vs Compensação */}
               <div className="grid grid-cols-1 gap-6 mb-8">
                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
@@ -1157,11 +1425,9 @@ if (loading) {
           </div>
       )}
 
-      {/* --- ABA 3: OPERACIONAL --- */}
-      {currentTab === 'operacional' && (
+      {/* --- ABA 3: EMISSÃO --- */}
+      {currentTab === 'emissao' && (
         <div className="animate-in fade-in zoom-in duration-300 space-y-8">
-            
-            {/* CARDS DE RESUMO MOVIDOS PARA CÁ */}
             <div>
                 <h3 className="text-sm font-bold font-display text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><DollarSign size={16}/> Resumo de Faturamento</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1212,14 +1478,13 @@ if (loading) {
                 </div>
             </div>
 
-          {/* TABELA DE PREVISÃO VS REALIZADO */}
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden">
+          <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col">
              <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900/50">
                <div>
                  <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><CalendarIcon className="text-blue-500" size={24}/> Previsão vs Realizado</h2>
                  <p className="text-sm text-slate-400">Acompanhamento de emissão de faturas</p>
                </div>
-               <div className="relative flex items-center gap-4">
+               <div className="relative flex flex-wrap items-center gap-4">
                  <div className="relative group">
                     <Search className="absolute left-2.5 top-2.5 text-slate-500 group-focus-within:text-blue-400" size={16}/>
                     <input 
@@ -1262,13 +1527,13 @@ if (loading) {
                 <div className="flex flex-col items-center justify-center h-[400px] text-slate-500">
                     <MousePointerClick size={48} className="mb-4 opacity-50" />
                     <p className="text-lg font-display font-medium">Selecione um Mês de Referência</p>
-                    <p className="text-sm opacity-70">Para carregar a análise operacional detalhada, escolha um mês no filtro acima.</p>
+                    <p className="text-sm opacity-70">Para carregar a análise detalhada, escolha um mês no filtro acima.</p>
                 </div>
              ) : (
-                 <>
-                    <div className="overflow-x-auto">
+                 <div className="flex flex-col flex-1">
+                    <div className="overflow-x-auto min-h-[400px]">
                         <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold tracking-wider">
+                        <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold tracking-wider border-b border-slate-800">
                             <tr>
                             <th className="px-6 py-4">UC / Cliente</th>
                             <th className="px-6 py-4">Distribuidora</th>
@@ -1285,7 +1550,7 @@ if (loading) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
-                            {operationalData.map((row: any) => {
+                            {paginatedEmissaoData.map((row: any) => {
                             const status = getStatusColor(row.data_prevista_norm, row.data_emissao_norm);
                             return (
                                 <tr key={`${row.uc}-${row.mes_norm}`} className="hover:bg-slate-800/50 transition-colors">
@@ -1312,14 +1577,22 @@ if (loading) {
                                 </tr>
                             );
                             })}
-                            {operationalData.length === 0 && (
+                            {paginatedEmissaoData.length === 0 && (
                             <tr><td colSpan={8} className="text-center py-12 text-slate-500">Nenhum dado encontrado para os filtros selecionados.</td></tr>
                             )}
                         </tbody>
+                        <tfoot className="bg-slate-900 border-t-2 border-slate-700 font-bold text-slate-200">
+                            <tr>
+                                <td colSpan={5} className="px-6 py-4 text-right font-display uppercase text-xs tracking-wider text-slate-500">Total (Registros Filtrados)</td>
+                                <td className="px-6 py-4 text-right text-blue-400 text-base">{formatMoney(totalEmissaoEstimado)}</td>
+                                <td className="px-6 py-4 text-right text-emerald-400 text-base border-r border-slate-800">{formatMoney(totalEmissaoRealizado)}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                         </table>
                     </div>
-                    <div className="bg-slate-900 p-4 border-t border-slate-800 text-xs text-slate-500 text-center">Exibindo {operationalData.length} registros</div>
-                 </>
+                    <Pagination page={emissaoPage} totalPages={totalEmissaoPages} setPage={setEmissaoPage} totalItems={operationalData.length} />
+                 </div>
              )}
           </div>
         </div>
@@ -1381,20 +1654,20 @@ if (loading) {
                                                         return (
                                                             <>
                                                                 <td key={`${conc}-val-ucs`} className="p-2 border border-slate-700 text-center text-slate-300">
-                                                                    {cellData.ucs > 0 ? cellData.ucs : '-'}
+                                                                    {cellData.ucs > 0 ? new Intl.NumberFormat('pt-BR').format(cellData.ucs) : '-'}
                                                                 </td>
                                                                 <td key={`${conc}-val-mwh`} className="p-2 border border-slate-700 text-center text-slate-400 text-[10px]">
-                                                                    {cellData.mwh > 0 ? Math.round(cellData.mwh) : '-'}
+                                                                    {cellData.mwh > 0 ? new Intl.NumberFormat('pt-BR').format(Math.round(cellData.mwh)) : '-'}
                                                                 </td>
                                                             </>
                                                         );
                                                     })}
                                                     
                                                     <td className="p-2 border border-slate-700 text-center font-bold text-white bg-slate-800">
-                                                        {totalRow.ucs}
+                                                        {new Intl.NumberFormat('pt-BR').format(totalRow.ucs)}
                                                     </td>
                                                     <td className="p-2 border border-slate-700 text-center font-bold text-yellow-400 bg-slate-800">
-                                                        {Math.round(totalRow.mwh)}
+                                                        {new Intl.NumberFormat('pt-BR').format(Math.round(totalRow.mwh))}
                                                     </td>
                                                 </tr>
                                             );
@@ -1407,19 +1680,19 @@ if (loading) {
                                                 return (
                                                     <>
                                                         <td key={`${conc}-sub-ucs`} className="p-2 border border-slate-700 text-center text-white">
-                                                            {subData.ucs > 0 ? subData.ucs : '-'}
+                                                            {subData.ucs > 0 ? new Intl.NumberFormat('pt-BR').format(subData.ucs) : '-'}
                                                         </td>
                                                         <td key={`${conc}-sub-mwh`} className="p-2 border border-slate-700 text-center text-yellow-300/80 text-[11px]">
-                                                            {subData.mwh > 0 ? Math.round(subData.mwh) : '-'}
+                                                            {subData.mwh > 0 ? new Intl.NumberFormat('pt-BR').format(Math.round(subData.mwh)) : '-'}
                                                         </td>
                                                     </>
                                                 );
                                             })}
                                             <td className="p-2 border border-slate-700 text-center text-white text-lg bg-blue-900/40">
-                                                {portfolioData.areaTotals[area]?.totalRow.ucs}
+                                                {new Intl.NumberFormat('pt-BR').format(portfolioData.areaTotals[area]?.totalRow.ucs || 0)}
                                             </td>
                                             <td className="p-2 border border-slate-700 text-center text-yellow-400 text-lg bg-blue-900/40">
-                                                {Math.round(portfolioData.areaTotals[area]?.totalRow.mwh)}
+                                                {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.areaTotals[area]?.totalRow.mwh || 0))}
                                             </td>
                                         </tr>
                                     </>
@@ -1431,18 +1704,18 @@ if (loading) {
                                 {portfolioData.allConcessionarias.map((conc: string) => (
                                     <>
                                         <td key={`${conc}-tot-ucs`} className="p-2 border border-slate-700 text-center text-white text-sm">
-                                            {portfolioData.concessionariaTotals[conc].ucs}
+                                            {new Intl.NumberFormat('pt-BR').format(portfolioData.concessionariaTotals[conc].ucs)}
                                         </td>
                                         <td key={`${conc}-tot-mwh`} className="p-2 border border-slate-700 text-center text-yellow-400 text-sm">
-                                            {Math.round(portfolioData.concessionariaTotals[conc].mwh)}
+                                            {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.concessionariaTotals[conc].mwh))}
                                         </td>
                                     </>
                                 ))}
                                 <td className="p-2 border border-slate-700 text-center text-white text-xl bg-slate-700">
-                                    {portfolioData.globalTotal.ucs}
+                                    {new Intl.NumberFormat('pt-BR').format(portfolioData.globalTotal.ucs)}
                                 </td>
                                 <td className="p-2 border border-slate-700 text-center text-yellow-400 text-xl bg-slate-700">
-                                    {Math.round(portfolioData.globalTotal.mwh)}
+                                    {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.globalTotal.mwh))}
                                 </td>
                             </tr>
                         </tbody>
@@ -1461,7 +1734,7 @@ if (loading) {
                     <div className="bg-blue-600 p-4 rounded-full shadow-lg shadow-blue-500/20"><Users size={32} className="text-white"/></div>
                     <div>
                         <p className="text-sm font-bold font-display text-blue-300 uppercase tracking-wider">Total CRM</p>
-                        <h2 className="text-4xl font-display font-extrabold text-white mt-1">{crmProcessed.stats.totalUCs} <span className="text-lg font-medium text-slate-400">UCs</span></h2>
+                        <h2 className="text-4xl font-display font-extrabold text-white mt-1">{new Intl.NumberFormat('pt-BR').format(crmProcessed.stats.totalUCs)} <span className="text-lg font-medium text-slate-400">UCs</span></h2>
                     </div>
                     <div className="h-12 w-px bg-blue-800/50 mx-4"></div>
                     <div>
@@ -1477,7 +1750,7 @@ if (loading) {
                     <h3 className="text-xs font-bold font-display text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Briefcase size={14}/> Por Área de Gestão</h3>
                     <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/50">
                         {Object.entries(crmProcessed.stats.byArea).map(([key, val]: any) => (
-                            <CrmKpiCard key={key} title={key} count={val.count} mwh={val.mwh} color="blue" />
+                            <CrmKpiCard key={key} title={key} count={new Intl.NumberFormat('pt-BR').format(val.count)} mwh={val.mwh} color="blue" />
                         ))}
                     </div>
                 </div>
@@ -1488,7 +1761,7 @@ if (loading) {
                         {crmProcessed.options.etapas.filter(k => k !== 'Todas').map((key: string) => {
                             const val = crmProcessed.stats.byEtapa[key];
                             if (!val) return null; 
-                            return <CrmKpiCard key={key} title={key} count={val.count} mwh={val.mwh} color="amber" />;
+                            return <CrmKpiCard key={key} title={key} count={new Intl.NumberFormat('pt-BR').format(val.count)} mwh={val.mwh} color="amber" />;
                         })}
                     </div>
                 </div>
@@ -1496,102 +1769,189 @@ if (loading) {
             )}
 
             <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col">
-                <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex flex-col xl:flex-row gap-4 justify-between items-end xl:items-center">
-                    <div className="flex flex-wrap gap-3 w-full xl:w-auto items-center">
-                        <div className="relative group w-full md:w-48">
-                            <Search className="absolute left-3 top-2.5 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={16}/>
-                            <input 
-                                type="text" 
-                                placeholder="Buscar UC ou Nome..." 
-                                value={crmSearch}
-                                onChange={e => setCrmSearch(e.target.value)}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
-                            />
-                        </div>
-                        <MultiSelect 
-                            options={crmProcessed.options.concessionarias.filter(o => o !== 'Todas')} 
-                            selected={crmFilterConcessionaria} 
-                            onChange={setCrmFilterConcessionaria} 
-                            placeholder="Concessionárias" 
-                            icon={Filter} 
-                        />
-                         <MultiSelect 
-                            options={crmProcessed.options.areas.filter(o => o !== 'Todas')} 
-                            selected={crmFilterArea} 
-                            onChange={setCrmFilterArea} 
-                            placeholder="Áreas de Gestão" 
-                        />
-                         <MultiSelect 
-                            options={crmProcessed.options.etapas.filter(o => o !== 'Todas')} 
-                            selected={crmFilterEtapa} 
-                            onChange={setCrmFilterEtapa} 
-                            placeholder="Etapas" 
-                        />
-                         <MultiSelect 
-                            options={crmProcessed.options.status.filter(o => o !== 'Todos')} 
-                            selected={crmFilterStatus} 
-                            onChange={setCrmFilterStatus} 
-                            placeholder="Status" 
-                        />
+                <div className="p-5 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><Users className="text-blue-500" size={24}/> Base de Clientes (CRM)</h2>
                     </div>
-                    <div className="text-xs text-slate-400 font-mono bg-slate-800 px-3 py-1 rounded border border-slate-700">
-                        {crmProcessed.filtered.length} Registros
+                    <div className="text-xs text-slate-400 font-mono bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
+                        Exibindo {crmProcessed.filtered.length} Registros
                     </div>
                 </div>
 
-                <div className="overflow-auto max-h-[600px] relative">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-400 uppercase bg-slate-950 font-semibold tracking-wider sticky top-0 z-10 shadow-sm">
-                            <tr>
-                                <th className="px-6 py-4">UC / Nome</th>
-                                <th className="px-6 py-4">Concessionária</th>
-                                <th className="px-6 py-4">Área</th>
-                                <th className="px-6 py-4">Objetivo / Etapa</th>
-                                <th className="px-6 py-4">Status RD</th>
-                                <th className="px-6 py-4 text-center">Datas (Ganho/Proto/Canc)</th>
-                                <th className="px-6 py-4 text-right bg-slate-900 border-l border-slate-800">Consumo (MWh)</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800">
-                            {crmProcessed.filtered.map((row: any, idx) => (
-                                <tr key={idx} className="hover:bg-slate-800/50 transition-colors group">
-                                    <td className="px-6 py-3">
-                                        <div className="font-mono text-slate-200 group-hover:text-blue-400 transition-colors">{row.uc}</div>
-                                        <div className="text-xs text-slate-500 truncate max-w-[220px]" title={row.nome_negocio}>{row.nome_negocio || '-'}</div>
-                                    </td>
-                                    <td className="px-6 py-3 text-slate-400">{row.concessionaria || '-'}</td>
-                                    <td className="px-6 py-3 text-slate-400 text-xs">
-                                        <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">{row.area_de_gestao || 'N/D'}</span>
-                                    </td>
-                                    <td className="px-6 py-3 text-slate-300 text-xs font-medium truncate max-w-[150px]" title={row.objetivo_etapa}>
-                                        {row.objetivo_etapa || '-'}
-                                    </td>
-                                    <td className="px-6 py-3 text-slate-400 text-xs">{row.status_rd || '-'}</td>
-                                    <td className="px-6 py-3 text-center text-[10px] text-slate-500 space-y-1">
-                                        <div title="Data Ganho" className={row.data_ganho ? "text-emerald-500/70" : ""}>G: {toDateBR(row.data_ganho)}</div>
-                                        <div title="Data Protocolo">P: {toDateBR(row.data_protocolo)}</div>
-                                        {row.data_cancelamento && <div title="Cancelamento" className="text-rose-500">C: {toDateBR(row.data_cancelamento)}</div>}
-                                    </td>
-                                    <td className="px-6 py-3 text-right font-mono text-slate-200 bg-slate-900/30 border-l border-slate-800">
-                                        {row.consumo_medio_mwh > 0 ? Number(row.consumo_medio_mwh).toFixed(2) : '-'}
+                <div className="flex flex-col flex-1">
+                    <div className="overflow-auto min-h-[400px]">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-400 uppercase bg-slate-950 font-semibold tracking-wider sticky top-0 z-10 shadow-sm border-b border-slate-800">
+                                <tr>
+                                    <th className="px-6 py-4">UC / Nome</th>
+                                    <th className="px-6 py-4">Concessionária</th>
+                                    <th className="px-6 py-4">Área</th>
+                                    <th className="px-6 py-4">Objetivo / Etapa</th>
+                                    <th className="px-6 py-4">Status RD</th>
+                                    <th className="px-6 py-4 text-center">Datas (Ganho/Proto/Canc)</th>
+                                    <th className="px-6 py-4 text-right bg-slate-900 border-l border-slate-800">Consumo (MWh)</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800">
+                                {paginatedCrmData.map((row: any, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-800/50 transition-colors group">
+                                        <td className="px-6 py-3">
+                                            <div className="font-mono text-slate-200 group-hover:text-blue-400 transition-colors">{row.uc}</div>
+                                            <div className="text-xs text-slate-500 truncate max-w-[220px]" title={row.nome_negocio}>{row.nome_negocio || '-'}</div>
+                                        </td>
+                                        <td className="px-6 py-3 text-slate-400">{row.concessionaria || '-'}</td>
+                                        <td className="px-6 py-3 text-slate-400 text-xs">
+                                            <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">{row.area_de_gestao || 'N/D'}</span>
+                                        </td>
+                                        <td className="px-6 py-3 text-slate-300 text-xs font-medium truncate max-w-[150px]" title={row.objetivo_etapa}>
+                                            {row.objetivo_etapa || '-'}
+                                        </td>
+                                        <td className="px-6 py-3 text-slate-400 text-xs">{row.status_rd || '-'}</td>
+                                        <td className="px-6 py-3 text-center text-[10px] text-slate-500 space-y-1">
+                                            <div title="Data Ganho" className={row.data_ganho ? "text-emerald-500/70" : ""}>G: {toDateBR(row.data_ganho)}</div>
+                                            <div title="Data Protocolo">P: {toDateBR(row.data_protocolo)}</div>
+                                            {row.data_cancelamento && <div title="Cancelamento" className="text-rose-500">C: {toDateBR(row.data_cancelamento)}</div>}
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono text-slate-200 bg-slate-900/30 border-l border-slate-800">
+                                            {row.consumo_medio_mwh > 0 ? Number(row.consumo_medio_mwh).toFixed(2) : '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {paginatedCrmData.length === 0 && (
+                                    <tr><td colSpan={7} className="text-center py-12 text-slate-500">Nenhum registro encontrado.</td></tr>
+                                )}
+                            </tbody>
+                            <tfoot className="sticky bottom-0 bg-slate-900 border-t border-slate-700 font-bold text-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] z-10">
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-3 text-right font-display uppercase text-xs tracking-wider text-slate-500">Total Filtrado</td>
+                                    <td className="px-6 py-3 text-right text-yellow-400 font-mono border-l border-slate-700 text-lg">
+                                        {crmProcessed.stats ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(crmProcessed.stats.totalMwh) : 0}
                                     </td>
                                 </tr>
-                            ))}
-                            {crmProcessed.filtered.length === 0 && (
-                                <tr><td colSpan={7} className="text-center py-12 text-slate-500">Nenhum registro encontrado.</td></tr>
-                            )}
-                        </tbody>
-                        <tfoot className="sticky bottom-0 bg-slate-900 border-t border-slate-700 font-bold text-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] z-10">
-                            <tr>
-                                <td colSpan={6} className="px-6 py-3 text-right font-display uppercase text-xs tracking-wider text-slate-500">Total Filtrado</td>
-                                <td className="px-6 py-3 text-right text-yellow-400 font-mono border-l border-slate-700 text-lg">
-                                    {crmProcessed.stats ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(crmProcessed.stats.totalMwh) : 0}
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <Pagination page={crmPage} totalPages={totalCrmPages} setPage={setCrmPage} totalItems={crmProcessed.filtered.length} />
                 </div>
             </div>
+        </div>
+      )}
+
+      {/* --- ABA AUDITORIA --- */}
+      {currentTab === 'auditoria' && (
+        <div className="animate-in fade-in zoom-in duration-300 flex flex-col gap-6">
+            {auditData && (
+                <>
+                {/* KPIs de Auditoria */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-6 opacity-10"><ClipboardList size={80} className="text-blue-500"/></div>
+                        <p className="text-xs font-bold font-display text-slate-400 uppercase tracking-wider mb-2">Total de UCs Analisadas</p>
+                        <h2 className="text-4xl font-display font-extrabold text-white">{new Intl.NumberFormat('pt-BR').format(auditData.stats.totalAnalisados)}</h2>
+                    </div>
+
+                    <div className="bg-slate-900 rounded-2xl border border-rose-900/50 shadow-lg p-6 relative overflow-hidden bg-gradient-to-br from-slate-900 to-rose-950/20">
+                        <div className="absolute top-0 right-0 p-6 opacity-10"><ShieldAlert size={80} className="text-rose-500"/></div>
+                        <p className="text-xs font-bold font-display text-rose-400 uppercase tracking-wider mb-2">Com Inconsistência (Filtrado)</p>
+                        <h2 className="text-4xl font-display font-extrabold text-rose-500">{new Intl.NumberFormat('pt-BR').format(auditData.issues.length)} <span className="text-sm text-slate-400 font-medium">UCs</span></h2>
+                    </div>
+
+                    <div className="bg-slate-900 rounded-2xl border border-emerald-900/50 shadow-lg p-6 relative overflow-hidden bg-gradient-to-br from-slate-900 to-emerald-950/20">
+                        <div className="absolute top-0 right-0 p-6 opacity-10"><CheckCircle2 size={80} className="text-emerald-500"/></div>
+                        <p className="text-xs font-bold font-display text-emerald-400 uppercase tracking-wider mb-2">% de Integridade (Data Quality)</p>
+                        <h2 className="text-4xl font-display font-extrabold text-emerald-500">{auditData.stats.percIntegridade}%</h2>
+                    </div>
+                </div>
+
+                {/* Tabela de Auditoria com Paginação e CSV */}
+                <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col mt-4">
+                    <div className="p-5 border-b border-slate-800 bg-slate-900/50 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><ShieldAlert className="text-rose-500" size={24}/> Relatório de Auditoria</h2>
+                            <p className="text-sm text-slate-400">Campos obrigatórios faltantes baseado nas regras de SLA de cada Etapa.</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <button 
+                                onClick={() => downloadAuditCSV(auditData.issues, 'relatorio_auditoria')} 
+                                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                            >
+                                <Download size={16} /> Baixar CSV
+                            </button>
+                            <div className="text-xs text-rose-400 font-mono bg-rose-950/30 px-3 py-2 rounded border border-rose-900/50">
+                                Exibindo {auditData.issues.length} pendências
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col flex-1">
+                        <div className="overflow-x-auto min-h-[400px]">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-slate-400 uppercase bg-slate-950 font-semibold tracking-wider border-b border-slate-800">
+                                    <tr>
+                                        <th className="px-6 py-4">UC / Negócio</th>
+                                        <th className="px-6 py-4">Status / Etapa</th>
+                                        <th className="px-6 py-4 w-1/3">Inconsistência(s) Encontrada(s)</th>
+                                        <th className="px-6 py-4 text-center">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {paginatedAuditData.map((row: any, idx) => (
+                                        <tr key={idx} className="hover:bg-slate-800/50 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <div className="font-mono text-slate-200">{row.uc}</div>
+                                                <div className="text-xs text-slate-500 truncate max-w-[250px]" title={row.nome_negocio}>{row.nome_negocio || '-'}</div>
+                                                <div className="text-[10px] text-slate-600 mt-1">{row.concessionaria} • {row.area_de_gestao}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-xs font-medium text-slate-300">{row.objetivo_etapa || '-'}</div>
+                                                <div className="text-[10px] text-slate-500 mt-1">{row.status_rd || '-'}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {row.missingFields.map((field: string, fIdx: number) => (
+                                                        <span key={fIdx} className="bg-rose-950/40 text-rose-400 border border-rose-900/50 px-2 py-0.5 rounded text-[10px] font-medium tracking-wide">
+                                                            Falta: {field}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                {row.rdLink ? (
+                                                    <a 
+                                                        href={row.rdLink} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                                    >
+                                                        <ExternalLink size={14} /> Corrigir no RD
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-xs text-slate-600 italic">ID não encontrado</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {paginatedAuditData.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} className="text-center py-16">
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <div className="bg-emerald-500/10 p-4 rounded-full mb-4">
+                                                        <CheckCircle2 size={48} className="text-emerald-500" />
+                                                    </div>
+                                                    <h3 className="text-lg font-bold font-display text-white">Nenhuma pendência encontrada!</h3>
+                                                    <p className="text-slate-400 mt-1">Para os filtros selecionados, a base está íntegra.</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <Pagination page={auditPage} totalPages={totalAuditPages} setPage={setAuditPage} totalItems={auditData.issues.length} />
+                    </div>
+                </div>
+                </>
+            )}
         </div>
       )}
 
@@ -1600,20 +1960,26 @@ if (loading) {
         <div className="animate-in fade-in zoom-in duration-300 h-[calc(100vh-200px)] flex flex-col">
             <div className="bg-slate-900 p-4 rounded-t-2xl border border-slate-800 border-b-0 flex flex-wrap gap-3 items-center z-10">
                 <span className="text-sm font-bold font-display text-slate-400 mr-2 flex items-center gap-2"><Filter size={16}/> Filtros do Mapa:</span>
-                <MultiSelect 
-                    options={crmProcessed.options.concessionarias.filter(o => o !== 'Todas')} 
-                    selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Concessionárias" 
-                />
-                <MultiSelect 
-                    options={crmProcessed.options.areas.filter(o => o !== 'Todas')} 
-                    selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Áreas" 
-                />
-                <MultiSelect 
-                    options={crmProcessed.options.etapas.filter(o => o !== 'Todas')} 
-                    selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Etapas" 
-                />
+                <div className="w-full md:w-48">
+                    <MultiSelect 
+                        options={crmProcessed.options.concessionarias.filter(o => o !== 'Todas')} 
+                        selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Concessionárias" 
+                    />
+                </div>
+                <div className="w-full md:w-48">
+                    <MultiSelect 
+                        options={crmProcessed.options.areas.filter(o => o !== 'Todas')} 
+                        selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Áreas" 
+                    />
+                </div>
+                <div className="w-full md:w-48">
+                    <MultiSelect 
+                        options={crmProcessed.options.etapas.filter(o => o !== 'Todas')} 
+                        selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Etapas" 
+                    />
+                </div>
                 <div className="ml-auto text-xs text-slate-500">
-                    {crmProcessed.filtered.length} clientes listados
+                    {new Intl.NumberFormat('pt-BR').format(crmProcessed.filtered.length)} clientes listados
                 </div>
             </div>
 
