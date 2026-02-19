@@ -33,14 +33,19 @@ L.Icon.Default.mergeOptions({
 
 // --- COMPONENTES AUXILIARES ---
 
+// 1. Mapa de Clientes (VERSÃO FINAL - LEITURA DIRETA DO BANCO)
 const ClientMap = ({ clients }: { clients: any[] }) => {
+    
+    // Processa os pontos instantaneamente (sem fetch)
     const locations = useMemo(() => {
         const points: any[] = [];
         let validos = 0;
         
         clients.forEach(c => {
+            // Só adiciona se tiver latitude e longitude vindas do banco
             if (c.latitude && c.longitude) {
                 validos++;
+                // Adiciona um micro-deslocamento (jitter) para pontos no mesmo endereço não se sobreporem totalmente
                 const lat = Number(c.latitude) + (Math.random() - 0.5) * 0.0002;
                 const lng = Number(c.longitude) + (Math.random() - 0.5) * 0.0002;
                 
@@ -51,13 +56,16 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                     name: c.nome_negocio || 'Sem Nome',
                     city: c.cidade || 'Desconhecido',
                     uf: c.uf || '',
-                    mwh: Number(c.consumo_medio_mwh) || 0
+                    mwh: Number(c.consumo_medio_mwh) || 0,
+                    dealId: c.id_negocio || null // <-- Capturando o ID do Negócio do BD
                 });
             }
         });
+        console.log(`[MAPA] Renderizando ${validos} pontos válidos do banco.`);
         return points;
     }, [clients]);
 
+    // Estado Inicial (Sem dados geográficos)
     if (locations.length === 0) {
         return (
             <div className="h-full w-full flex flex-col items-center justify-center bg-slate-900 text-center p-6 relative z-10">
@@ -81,7 +89,7 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                 center={[-15.79, -47.88]} 
                 zoom={4} 
                 style={{ height: '100%', width: '100%' }}
-                preferCanvas={true}
+                preferCanvas={true} // Melhora performance com muitos pontos
             >
                 <TileLayer
                     attribution='&copy; OpenStreetMap'
@@ -93,8 +101,25 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                             <div className="p-1 min-w-[150px]">
                                 <h4 className="font-bold font-display text-slate-800 text-sm mb-1 border-b pb-1">{loc.city}-{loc.uf}</h4>
                                 <div className="text-xs text-slate-600 mt-1">
-                                    <p className="truncate font-medium text-slate-800">{loc.name}</p>
-                                    <p className="mt-1">Consumo: <span className="font-bold text-blue-600">{Math.round(loc.mwh)} MWh</span></p>
+                                    {/* Link Dinâmico para o RD Station CRM */}
+                                    {loc.dealId ? (
+                                        <a 
+                                            href={`https://crm.rdstation.com/app/deals/${loc.dealId}`} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="truncate font-bold text-blue-600 hover:text-blue-800 hover:underline block mb-1"
+                                            title="Abrir Negócio no RD Station"
+                                        >
+                                            {loc.name}
+                                        </a>
+                                    ) : (
+                                        <p className="truncate font-medium text-slate-800 mb-1">{loc.name}</p>
+                                    )}
+                                    
+                                    {/* Exibição em kWh formatado */}
+                                    <p className="mt-1">
+                                        Consumo: <span className="font-bold text-emerald-600">{new Intl.NumberFormat('pt-BR').format(Math.round(loc.mwh * 1000))} kWh</span>
+                                    </p>
                                 </div>
                             </div>
                         </Popup>
@@ -897,8 +922,41 @@ function App() {
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-950 text-white"><Loader2 className="animate-spin h-12 w-12 text-blue-500 mr-2" /> Carregando Dashboard...</div>;
+if (loading) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center bg-slate-950 text-white p-6 relative overflow-hidden">
+        
+        {/* MARCA D'ÁGUA GIGANTE NO FUNDO */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full flex items-center justify-center opacity-[0.03] pointer-events-none">
+           <img 
+              src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" 
+              alt="Background" 
+              className="w-full max-w-5xl object-contain scale-150" 
+           />
+        </div>
 
+        {/* Efeito de luz suave (usando a cor verde da sua paleta) */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+        
+        {/* CONTEÚDO CENTRAL */}
+        <div className="relative z-10 flex flex-col items-center animate-in fade-in zoom-in duration-700">
+          {/* Logo Principal (Sem bordas e sem fundo branco) */}
+          <img 
+            src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" 
+            alt="Simplifica Energia" 
+            className="w-full max-w-[280px] object-contain mb-10 drop-shadow-[0_0_15px_rgba(255,255,255,0.05)]"
+          />
+          
+          <Loader2 className="animate-spin h-10 w-10 text-blue-500 mb-6" />
+          
+          <div className="text-center">
+              <h2 className="text-2xl font-bold font-display text-white tracking-wide">Bem-vindo(a)!</h2>
+              <p className="text-sm text-slate-400 mt-2 font-medium">Aguarde enquanto sincronizamos o seu dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans p-6 pb-20">
       {/* HEADER */}
