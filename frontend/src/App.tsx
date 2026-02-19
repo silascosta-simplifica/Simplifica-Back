@@ -463,7 +463,16 @@ function App() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
-     
+  const formatTarifa = (val: number | null) => {
+    if (val === null || val === undefined) return '-';
+    return new Intl.NumberFormat('pt-BR', { 
+        style: 'currency', 
+        currency: 'BRL',
+        minimumFractionDigits: 5,
+        maximumFractionDigits: 5
+    }).format(val);
+  };
+
   const formatEnergySmart = (val: number, inputUnit: 'MWh' | 'kWh' = 'MWh') => {
     let valInMwh = inputUnit === 'kWh' ? val / 1000 : val;
     if (valInMwh >= 1) return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(valInMwh)} MWh`;
@@ -939,38 +948,54 @@ function App() {
              <div>
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><DollarSign size={16}/> Resumo de Faturamento</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    {/* CARD: FATURAMENTO POTENCIAL */}
                     <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
                     <h3 className="text-slate-400 font-bold mb-2 text-xs uppercase tracking-wider">Faturamento Potencial</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">{formatMoney(macroMetrics.estimado)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
-                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdEstimado} UCs</span>
-                        <span className="text-emerald-300 bg-emerald-950 border border-emerald-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaEstimada, 'MWh')}</span>
+                            <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdEstimado} UCs</span>
+                            <span className="text-emerald-300 bg-emerald-950 border border-emerald-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaEstimada, 'MWh')}</span>
+                            {/* NOVA TAG DE TARIFA */}
+                            <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Estimada">
+                                <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaEstimada)}/kWh
+                            </span>
                         </div>
                     </div>
                     </div>
 
+                    {/* CARD: FATURAMENTO REALIZADO */}
                     <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-blue-500 rounded-full"><FileText size={120} /></div>
                     <h3 className="text-slate-400 font-bold mb-2 text-xs uppercase tracking-wider">Faturamento Realizado</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-extrabold text-blue-500 tracking-tight">{formatMoney(macroMetrics.realizado)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
-                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdRealizado} UCs</span>
-                        <span className="text-yellow-300 bg-yellow-950 border border-yellow-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaRealizada, 'MWh')}</span>
+                            <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdRealizado} UCs</span>
+                            <span className="text-yellow-300 bg-yellow-950 border border-yellow-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaRealizada, 'MWh')}</span>
+                            {/* NOVA TAG DE TARIFA */}
+                            <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Realizada">
+                                <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaRealizada)}/kWh
+                            </span>
                         </div>
                     </div>
                     </div>
 
+                    {/* CARD: PENDENTE */}
                     <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden border-l-4 border-l-amber-500">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-amber-500 rounded-full"><Clock size={120} /></div>
                     <h3 className="text-slate-400 font-bold mb-2 text-xs uppercase tracking-wider">Pendente</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-extrabold text-amber-500 tracking-tight">{formatMoney(macroMetrics.pendente)}</h2>
-                        <div className="flex gap-2 text-xs mt-3">
+                        <div className="flex flex-wrap gap-2 text-xs mt-3">
                             <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md inline-block font-medium">{macroMetrics.qtdPendente} UCs</span>
                             <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaPendente, 'MWh')}</span>
+                            {/* NOVA TAG DE TARIFA */}
+                            <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Pendente">
+                                <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaPendente)}/kWh
+                            </span>
                         </div>
                     </div>
                     </div>
