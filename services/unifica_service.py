@@ -79,9 +79,7 @@ def limpar_uc(valor):
 
 def processar_item_unifica(item):
     return {
-        # APLICANDO A LIMPEZA DE UC AQUI:
         "uc": limpar_uc(item.get("uc")),
-        
         "mes_referencia": tratar_data(item.get("date_ref")),
         "nome_cliente": item.get("client_name"),
         "valor_fatura": limpar_numero(item.get("dealership_bill_cost")), 
@@ -103,14 +101,22 @@ def processar_item_unifica(item):
 def salvar_em_lotes(lista_itens):
     if not lista_itens: return
     dados_prontos = []
+    
     for x in lista_itens:
         try:
             p = processar_item_unifica(x)
-            if p["uc"] and p["mes_referencia"] and len(p["mes_referencia"]) == 10:
+            # Alteração: Agora ele avisa se o item for barrado na validação
+            if p["uc"] and p["mes_referencia"] and len(str(p["mes_referencia"])) == 10:
                 dados_prontos.append(p)
-        except: pass
+            else:
+                print(f"\n⚠️ Item DESCARTADO (Falta UC ou Data Inválida) -> UC: {p['uc']} | Mês: {p['mes_referencia']}")
+        except Exception as e:
+            # Alteração: O 'pass' silencioso foi removido. Agora ele "grita" o erro.
+            print(f"\n❌ ERRO ao processar linha: {e} | Dados brutos: {x.get('uc', 'Sem UC')}")
 
-    if not dados_prontos: return
+    if not dados_prontos: 
+        print("\n⚠️ Nenhum dado válido neste lote para salvar.")
+        return
 
     with engine.begin() as conn:
         for item in dados_prontos:
@@ -170,20 +176,17 @@ def salvar_checkpoint(page):
         f.write(str(page))
 
 def executar_sync_unifica():
-    # RODA AUTO-CURA ANTES DE TUDO
     verificar_e_criar_colunas()
     
-    print("🚀 Sincronizando Unifica (Modo Tanque de Guerra - Versão Leve)...")
-    
-    # Se quiser recomeçar do zero, descomente a linha abaixo
-    # if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
+    print("🚀 Sincronizando Unifica (Modo Tanque de Guerra - Com Radar Ligado)...")
     
     headers = {"Authorization": f"Bearer {UNIFICA_TOKEN}", "Content-Type": "application/json", "accept": "*/*"}
     full_url = f"{UNIFICA_URL}{ENDPOINT}"
     
     session = get_session()
     
-    page = 1 
+    # Alteração: Agora ele realmente puxa a página salva no checkpoint
+    page = carregar_checkpoint() 
     per_page = 50
     total_baixado = 0
     
@@ -197,30 +200,41 @@ def executar_sync_unifica():
                 resp = session.get(full_url, headers=headers, params=params, timeout=120)
                 
                 if resp.status_code == 429:
-                    print("⏳ Rate Limit (429). Esperando 30s...")
+                    print("\n⏳ Rate Limit (429). Esperando 30s...")
                     time.sleep(30)
                     continue
                 
                 if resp.status_code != 200:
-                    print(f"❌ Erro API {resp.status_code}. Esperando 10s...")
-                    if resp.status_code in [401, 403, 404]: 
-                        sucesso = True
+                    print(f"\n❌ Erro API {resp.status_code}. Esperando 10s...")
+                    # Alteração: 401 e 403 são erros de token, então aborta. 404 pode ser fim de página, então sai do loop com break.
+                    if resp.status_code in [401, 403]: 
+                        print("🛑 Erro de Autenticação/Permissão. Abortando execução.")
                         return
+                    if resp.status_code == 404:
+                        print("🏁 Fim dos dados (Página não encontrada).")
+                        sucesso = True
+                        break
+                        
                     time.sleep(10)
                     continue
                 
                 sucesso = True
 
             except Exception as e:
-                print(f"⚠️ Falha conexão: {e}. Tentando novamente em 15s...")
+                print(f"\n⚠️ Falha conexão: {e}. Tentando novamente em 15s...")
                 time.sleep(15)
         
+        # Se a página deu 404, o bloco abaixo pode falhar ou vir vazio. Tratamos isso:
+        if resp.status_code == 404:
+            if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
+            break
+
         try:
             dados = resp.json()
             lista = dados.get("data", [])
             
             if not lista: 
-                print("🏁 Fim dos dados.")
+                print("\n🏁 Fim dos dados (Lista vazia).")
                 if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
                 break
             
@@ -232,7 +246,7 @@ def executar_sync_unifica():
             
             meta = dados.get("meta", {})
             if page >= meta.get("last_page", 99999):
-                print("🏁 Última página atingida.")
+                print("\n🏁 Última página atingida pelas métricas da API.")
                 if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
                 break
                 
@@ -240,7 +254,7 @@ def executar_sync_unifica():
             time.sleep(0.5) 
             
         except Exception as e:
-            print(f"❌ Erro processamento JSON: {e}")
+            print(f"\n❌ Erro processamento JSON na página {page}: {e}")
             break
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ def exportar_tabelao():
     engine = create_engine(DB_URL)
     
     try:
-        # Busca direta da VIEW consolidada (que carrega as novas colunas)
+        # Busca direta da VIEW consolidada
         query = """
         SELECT * FROM analytics_completo 
         ORDER BY mes_referencia DESC, nome_cliente ASC
@@ -31,9 +31,9 @@ def exportar_tabelao():
             print("⚠️ A tabela está vazia.")
             return
 
-        print("🎨 Formatando planilha para auditoria...")
+        print("🎨 Formatando planilha...")
         
-        # Traduzindo as colunas do banco para nomes de fácil leitura no Excel
+        # Renomear colunas para ficar bonito no Excel
         df = df.rename(columns={
             "uc": "UC",
             "mes_referencia": "Mês Ref",
@@ -49,6 +49,9 @@ def exportar_tabelao():
             "eficiencia_compensacao": "Eficiência (%)",
             "tarifa_estimada": "Tarifa Estimada (RD)",
             "tarifa_real": "Tarifa Real (Fatura)",
+            "is_consorcio": "Troca Titularidade?",          # <--- NOVA EXPORTADA
+            "boleto_simplifica": "Boleto Simplifica (R$)",  # <--- NOVA EXPORTADA
+            "valor_fatura_distribuidora": "Fatura Concessionária (R$)", # <--- NOVA EXPORTADA
             "valor_estimado": "Valor Estimado (R$)",
             "valor_real_cobranca": "Valor Realizado (R$)",
             "total_cobranca": "Total Final (R$)",
@@ -62,26 +65,25 @@ def exportar_tabelao():
             "vencimento": "Vencimento"
         })
 
-        # Nova Ordem Estratégica das Colunas no Excel
+        # Nova Ordem das Colunas no Excel
         colunas_finais = [
             "UC", "Cliente", "Mês Ref", "Concessionária", "Área de Gestão", 
             "Etapa (RD)", "Origem do Dado", "Status Pagamento", 
             "Consumo RD (MWh)", "Consumo Fatura (kWh)", "Compensação Fatura (kWh)", "Eficiência (%)",
-            "Tarifa Estimada (RD)", "Tarifa Real (Fatura)",
+            "Troca Titularidade?", "Tarifa Estimada (RD)", "Tarifa Real (Fatura)",
+            "Boleto Simplifica (R$)", "Fatura Concessionária (R$)", 
             "Valor Estimado (R$)", "Valor Realizado (R$)", "Total Final (R$)", "Economia (R$)",
             "Data de Ganho", "Data do 1º Protocolo", "Data de Cancelamento",
             "Dia Leitura Base", "Data Emissão Prevista", "Data Emissão Real", "Vencimento"
         ]
         
-        # Filtra apenas as colunas existentes garantindo a nova ordem
         cols_existentes = [c for c in colunas_finais if c in df.columns]
         df = df[cols_existentes]
 
-        # Multiplica a eficiência por 100 para o Excel ler mais fácil (se existir)
+        # Formata percentual
         if "Eficiência (%)" in df.columns:
             df["Eficiência (%)"] = df["Eficiência (%)"] * 100
 
-        # Gera nome com data e hora
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
         arquivo_saida = f"Tabelao_Auditoria_{timestamp}.xlsx"
         

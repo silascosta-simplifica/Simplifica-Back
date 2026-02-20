@@ -5,7 +5,7 @@ import {
   Area, ComposedChart, Bar
 } from 'recharts';
 import { 
-  Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ArrowDown, ShieldAlert, ClipboardList, ExternalLink, Settings2
+  LayoutDashboard, Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ArrowDown, ShieldAlert, ClipboardList, ExternalLink, Settings2
 } from 'lucide-react';
 import { 
   subMonths, isAfter, isBefore, startOfMonth, endOfMonth, format, 
@@ -433,7 +433,7 @@ function App() {
   });
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
 
-  // Filtros Emissão (E Colunas Opcionais)
+  // Filtros Emissão
   const [searchText, setSearchText] = useState('');
   const [opFilterStatus, setOpFilterStatus] = useState('Todos'); 
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null); 
@@ -452,7 +452,7 @@ function App() {
 
   // Filtros Auditoria
   const [auditSearch, setAuditSearch] = useState('');
-  const [auditFilterEtapa] = useState<string[]>([]);
+  const [auditFilterEtapa, setAuditFilterEtapa] = useState<string[]>([]);
   const [auditFilterInconsistencia, setAuditFilterInconsistencia] = useState<string[]>([]);
   const [auditPage, setAuditPage] = useState(1);
 
@@ -564,12 +564,20 @@ function App() {
     } catch { return '-'; }
   };
 
-  const getStatusColor = (prevista: string | null, real: string | null) => {
-    if (real) return { color: 'text-emerald-400', bg: 'bg-emerald-900/30 border border-emerald-800', text: 'Concluído', value: 'Concluído' };
-    if (!prevista) return { color: 'text-gray-500', bg: 'bg-transparent', text: '-', value: 'Pendente' };
+  // NOVA REGRA DE STATUS DA ABA EMISSÃO (Foco na Emissão do documento)
+  const getStatusColor = (prevista: string | null, real: string | null, valorRealizado: number) => {
+    // Se tem Data Real de Emissão ou se existe algum Valor cobrado pela concessionária -> EMITIDO
+    if (real || valorRealizado > 0) return { color: 'text-emerald-400', bg: 'bg-emerald-900/30 border border-emerald-800', text: 'Emitido', value: 'Emitido' };
+    
+    // Se não tem nada previsto -> Ignora
+    if (!prevista) return { color: 'text-gray-500', bg: 'bg-transparent', text: '-', value: 'Aguardando' };
+    
     const hoje = new Date().toISOString().split('T')[0];
+    // Se hoje já passou da data limite que esperávamos a fatura -> ATRASADO
     if (hoje > prevista) return { color: 'text-red-300', bg: 'bg-red-900/40 border border-red-800', text: 'Atrasado', value: 'Atrasado' };
-    return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'No Prazo', value: 'No Prazo' };
+    
+    // Se não emitiu ainda, mas estamos dentro do prazo -> AGUARDANDO
+    return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'Aguardando', value: 'Aguardando' };
   };
     
   const uniqueConcessionarias = useMemo(() => ['Todas', ...new Set(data.map(d => d.concessionaria_norm).filter(Boolean).sort())], [data]);
@@ -621,18 +629,16 @@ function App() {
     });
   }, [data, selectedConcessionaria, selectedArea, selectedEtapa, selectedMesRef, dateRange]);
 
-  // CORREÇÃO: macroMetrics agora soma corretamente as previsões SEM descartar UCs com compensação zero
   const macroMetrics = useMemo(() => {
     const activeData = filteredData;
-    const hasStatus = (s: string) => s && s !== 'Indefinido' && s !== 'null' && s.trim() !== '';
-
-    const itensRealizados = activeData.filter(d => hasStatus(d.status_norm));
+    
+    const itensRealizados = activeData.filter(d => getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value === 'Emitido');
     const realizadoValor = itensRealizados.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0); 
     const realizadoEnergiaKwh = itensRealizados.reduce((acc, curr) => acc + (curr.compensacao_real_kwh || 0), 0);
     const realizadoEnergiaMWh = realizadoEnergiaKwh / 1000;
     const tarifaMediaRealizada = realizadoEnergiaKwh > 0 ? realizadoValor / realizadoEnergiaKwh : 0;
 
-    const itensPendentes = activeData.filter(d => !hasStatus(d.status_norm));
+    const itensPendentes = activeData.filter(d => getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value !== 'Emitido');
     const pendenteValor = itensPendentes.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0); 
     const pendenteEnergiaKwh = itensPendentes.reduce((acc, curr) => acc + ((curr.consumo_mwh || 0) * 1000), 0);
     const pendenteEnergiaMwh = pendenteEnergiaKwh / 1000;
@@ -947,7 +953,7 @@ function App() {
         
         let matchStatus = true;
         if (opFilterStatus !== 'Todos') {
-            const statusInfo = getStatusColor(item.data_prevista_norm, item.data_emissao_norm);
+            const statusInfo = getStatusColor(item.data_prevista_norm, item.data_emissao_norm, item.valor_realizado);
             matchStatus = statusInfo.value === opFilterStatus;
         }
 
@@ -966,16 +972,22 @@ function App() {
     return filtered;
   }, [filteredData, searchText, opFilterStatus, sortConfig, selectedMesRef]);
 
-  // NOVO: emissaoMetrics garante que os cards da aba Emissão sejam 100% fieis à tabela filtrada
+  // Cards de Faturamento agora usam exatamente a mesma palavra chave: "Emitido"
   const emissaoMetrics = useMemo(() => {
-    const hasStatus = (s: string) => s && s !== 'Indefinido' && s !== 'null' && s.trim() !== '';
-
-    const itensRealizados = operationalData.filter(d => hasStatus(d.status_norm));
+    const itensRealizados = operationalData.filter(d => {
+        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
+        return status === 'Emitido';
+    });
+    
     const realizadoValor = itensRealizados.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0); 
     const realizadoEnergiaMWh = itensRealizados.reduce((acc, curr) => acc + ((curr.compensacao_real_kwh || 0) / 1000), 0);
     const tarifaMediaRealizada = (realizadoEnergiaMWh * 1000) > 0 ? realizadoValor / (realizadoEnergiaMWh * 1000) : 0;
 
-    const itensPendentes = operationalData.filter(d => !hasStatus(d.status_norm));
+    const itensPendentes = operationalData.filter(d => {
+        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
+        return status !== 'Emitido';
+    });
+    
     const pendenteValor = itensPendentes.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0); 
     const pendenteEnergiaMwh = itensPendentes.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0);
     const tarifaPendente = (pendenteEnergiaMwh * 1000) > 0 ? pendenteValor / (pendenteEnergiaMwh * 1000) : 0;
@@ -1166,7 +1178,6 @@ function App() {
   const paginatedEmissaoData = operationalData.slice((emissaoPage - 1) * ITEMS_PER_PAGE, emissaoPage * ITEMS_PER_PAGE);
   const totalEmissaoPages = Math.ceil(operationalData.length / ITEMS_PER_PAGE);
   
-  // Totalizadores cravados baseados no que está filtrado e desenhado na tabela
   const totalEmissaoEstimado = operationalData.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0);
   const totalEmissaoRealizado = operationalData.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0);
 
@@ -1211,7 +1222,6 @@ function App() {
         </div>
       </header>
 
-      {/* --- FILTROS GLOBAIS NO TOPO UNIFICADOS --- */}
       {currentTab !== 'carteira' && currentTab !== 'localizacao' && (
       <section className={`grid gap-4 mb-8 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm animate-in fade-in zoom-in duration-300 grid-cols-1 sm:grid-cols-2 md:grid-cols-5`}>
         
@@ -1470,7 +1480,7 @@ function App() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
-                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturamento Potencial</h3>
+                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Projeção do Mês</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-display font-extrabold text-white tracking-tight">{formatMoney(emissaoMetrics.estimado)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
@@ -1485,7 +1495,7 @@ function App() {
 
                     <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-blue-500 rounded-full"><FileText size={120} /></div>
-                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturamento Realizado</h3>
+                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturas Emitidas</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-display font-extrabold text-blue-500 tracking-tight">{formatMoney(emissaoMetrics.realizado)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
@@ -1500,7 +1510,7 @@ function App() {
 
                     <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden border-l-4 border-l-amber-500">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-amber-500 rounded-full"><Clock size={120} /></div>
-                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Pendente</h3>
+                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Aguardando Emissão</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-display font-extrabold text-amber-500 tracking-tight">{formatMoney(emissaoMetrics.pendente)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
@@ -1516,13 +1526,13 @@ function App() {
             </div>
 
           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col">
-             <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50">
+             <div className="p-6 border-b border-slate-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-slate-900/50">
                <div>
                  <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><CalendarIcon className="text-blue-500" size={24}/> Previsão vs Realizado</h2>
                  <p className="text-sm text-slate-400">Acompanhamento de emissão de faturas</p>
                </div>
                
-               <div className="flex flex-wrap items-center justify-between w-full lg:w-auto gap-4 flex-1 lg:ml-8">
+               <div className="flex flex-wrap items-center justify-between w-full xl:w-auto gap-4 flex-1 xl:ml-8">
                    <div className="flex flex-wrap items-center gap-3">
                      <div className="relative group">
                         <Search className="absolute left-2.5 top-2.5 text-slate-500 group-focus-within:text-blue-400" size={16}/>
@@ -1542,9 +1552,9 @@ function App() {
                           className="bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 cursor-pointer w-40"
                         >
                             <option value="Todos">Status: Todos</option>
-                            <option value="Concluído">Concluído</option>
+                            <option value="Emitido">Emitido</option>
                             <option value="Atrasado">Atrasado</option>
-                            <option value="No Prazo">No Prazo</option>
+                            <option value="Aguardando">Aguardando</option>
                         </select>
                      </div>
                    </div>
@@ -1587,17 +1597,17 @@ function App() {
                                 {emissaoColunas.includes('Eficiência (%)') && <th className="px-6 py-4 text-center text-emerald-400 bg-emerald-900/10">Eficiência</th>}
 
                                 <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('valor_potencial')}>
-                                    <div className="flex items-center justify-end gap-1">Valor Estimado <ArrowUpDown size={14}/></div>
+                                    <div className="flex items-center justify-end gap-1">Projeção (R$) <ArrowUpDown size={14}/></div>
                                 </th>
                                 <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('valor_realizado')}>
-                                    <div className="flex items-center justify-end gap-1">Valor Realizado <ArrowUpDown size={14}/></div>
+                                    <div className="flex items-center justify-end gap-1">Valor Faturado (R$) <ArrowUpDown size={14}/></div>
                                 </th>
                                 <th className="px-6 py-4 text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                             {paginatedEmissaoData.map((row: any) => {
-                            const status = getStatusColor(row.data_prevista_norm, row.data_emissao_norm);
+                            const status = getStatusColor(row.data_prevista_norm, row.data_emissao_norm, row.valor_realizado);
                             
                             const eficPercent = row.eficiencia_compensacao * 100;
                             let eficColor = 'text-rose-400';
@@ -1606,8 +1616,7 @@ function App() {
                             if (eficPercent >= 90) { eficColor = 'text-emerald-400'; eficBg = 'bg-emerald-900/40 border-emerald-800/50'; }
                             else if (eficPercent >= 70) { eficColor = 'text-yellow-400'; eficBg = 'bg-yellow-900/40 border-yellow-800/50'; }
 
-                            // Mostra a eficiência zerada se tiver fatura ou se estiver atrasado, caso contrário esconde (-)
-                            const isMeasuredEfic = row.status_norm === 'Concluído' || row.status_norm === 'Atrasado' || row.consumo_real_kwh > 0 || row.compensacao_real_kwh > 0;
+                            const isMeasuredEfic = status.value === 'Emitido' || status.value === 'Atrasado' || row.consumo_real_kwh > 0 || row.compensacao_real_kwh > 0;
 
                             return (
                                 <tr key={`${row.uc}-${row.mes_norm}`} className="hover:bg-slate-800/50 transition-colors whitespace-nowrap">
