@@ -5,7 +5,7 @@ import {
   Area, ComposedChart, Bar
 } from 'recharts';
 import { 
-  LayoutDashboard, Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ArrowDown, ShieldAlert, ClipboardList, ExternalLink, Settings2
+  Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ArrowDown, ShieldAlert, ClipboardList, ExternalLink, Settings2
 } from 'lucide-react';
 import { 
   subMonths, isAfter, isBefore, startOfMonth, endOfMonth, format, 
@@ -452,7 +452,7 @@ function App() {
 
   // Filtros Auditoria
   const [auditSearch, setAuditSearch] = useState('');
-  const [auditFilterEtapa, setAuditFilterEtapa] = useState<string[]>([]);
+  const [auditFilterEtapa] = useState<string[]>([]);
   const [auditFilterInconsistencia, setAuditFilterInconsistencia] = useState<string[]>([]);
   const [auditPage, setAuditPage] = useState(1);
 
