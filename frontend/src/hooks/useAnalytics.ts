@@ -109,6 +109,7 @@ export const useAnalytics = () => {
         }
 
         return {
+          ...row, // ADICIONADO: Garante que os novos campos cheguem até o App.tsx!
           uc: row.uc,
           nome: row.nome_cliente || 'Sem Nome',
           cliente: row.nome_cliente,
@@ -146,6 +147,11 @@ export const useAnalytics = () => {
           "vencimento_do_boleto": row.vencimento,
           "data_do_1º_protocolo": row.data_protocolo,
           "data_de_pedido_de_cancelamento": row.data_cancelamento,
+          
+          // FORÇANDO A LEITURA DOS NOVOS CAMPOS COM SEGURANÇA
+          tarifa_estimada: n(row.tarifa_estimada),
+          tarifa_real: n(row.tarifa_real),
+          eficiencia_compensacao: n(row.eficiencia_compensacao)
         };
       });
 

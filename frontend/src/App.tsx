@@ -5,7 +5,7 @@ import {
   Area, ComposedChart, Bar
 } from 'recharts';
 import { 
-  Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ArrowDown, ShieldAlert, ClipboardList, ExternalLink
+  LayoutDashboard, Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ArrowDown, ShieldAlert, ClipboardList, ExternalLink, Settings2
 } from 'lucide-react';
 import { 
   subMonths, isAfter, isBefore, startOfMonth, endOfMonth, format, 
@@ -366,7 +366,6 @@ const FinancialTable = ({ title, data, colorClass, totalValue, totalCompensated,
   </div>
 );
 
-// Componente Genérico de Paginação
 const Pagination = ({ page, totalPages, setPage, totalItems }: { page: number, totalPages: number, setPage: (p: number) => void, totalItems: number }) => (
     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-4 bg-slate-900 border-t border-slate-800 text-sm text-slate-400">
       <div>
@@ -426,19 +425,22 @@ function App() {
   const [currentTab, setCurrentTab] = useState<'geral' | 'financeiro' | 'emissao' | 'carteira' | 'crm' | 'auditoria' | 'localizacao'>('geral');
   
   const [selectedConcessionaria, setSelectedConcessionaria] = useState('Todas');
+  const [selectedArea, setSelectedArea] = useState('Todas');
+  const [selectedEtapa, setSelectedEtapa] = useState('Todas');
   const [selectedMesRef, setSelectedMesRef] = useState(() => {
       const now = new Date();
       return `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
   });
-  const [selectedArea, setSelectedArea] = useState('Todas');
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
 
-  // Filtros Emissão
+  // Filtros Emissão (E Colunas Opcionais)
   const [searchText, setSearchText] = useState('');
   const [opFilterStatus, setOpFilterStatus] = useState('Todos'); 
-  const [opFilterEtapa, setOpFilterEtapa] = useState('Todas'); 
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null); 
   const [emissaoPage, setEmissaoPage] = useState(1);
+  const [emissaoColunas, setEmissaoColunas] = useState<string[]>([]);
+  
+  const emissaoColunasOptions = ['Consumo RD (kWh)', 'Tarifa RD (Estimada)', 'Tarifa Fatura (Real)', 'Consumo (Fatura)', 'Compensação (Fatura)', 'Eficiência (%)'];
 
   // Filtros CRM
   const [crmSearch, setCrmSearch] = useState('');
@@ -456,13 +458,19 @@ function App() {
 
   const ITEMS_PER_PAGE = 20;
 
-  // Reset de páginas quando filtros mudam
-  useEffect(() => { setEmissaoPage(1); }, [searchText, opFilterStatus, opFilterEtapa, selectedMesRef, selectedConcessionaria, selectedArea, dateRange]);
-  useEffect(() => { setAuditPage(1); }, [auditSearch, auditFilterEtapa, auditFilterInconsistencia, selectedConcessionaria, selectedArea]);
-  useEffect(() => { setCrmPage(1); }, [crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus, selectedConcessionaria, selectedArea]);
+  useEffect(() => { setEmissaoPage(1); }, [searchText, opFilterStatus, selectedEtapa, selectedMesRef, selectedConcessionaria, selectedArea, dateRange]);
+  useEffect(() => { setAuditPage(1); }, [auditSearch, auditFilterEtapa, auditFilterInconsistencia, selectedConcessionaria, selectedArea, selectedEtapa]);
+  useEffect(() => { setCrmPage(1); }, [crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus, selectedConcessionaria, selectedArea, selectedEtapa]);
 
   const data = useMemo(() => {
     if (!rawData) return [];
+
+    const parseNum = (val: any) => {
+        if (val === null || val === undefined || val === '') return 0;
+        const n = Number(val);
+        return isNaN(n) ? 0 : n;
+    };
+
     return rawData.map((d: any) => {
       const conc = d['concessionária'] || d.concessionaria || d.concessionaria_rd || 'Outra';
       const area = d['área_de_gestão'] || d.area_de_gestao || 'Outros';
@@ -470,13 +478,12 @@ function App() {
       
       const dataEntrada = d.data_protocolo || d['data_do_1º_protocolo'] || d.data_ganho || d.created_at || null;
       
-      const valorTotal = parseFloat(d.total_cobranca) || parseFloat(d['total_cobrança_r$']) || 0;
-      const valorEstimado = parseFloat(d.valor_estimado) || 0;
+      const valorTotal = parseNum(d.total_cobranca) || parseNum(d['total_cobrança_r$']);
+      const valorEstimado = parseNum(d.valor_estimado);
+      const valorRealizado = parseNum(d.valor_real_cobranca);
       
       const statusRaw = d.status || d['Status Pagamento'];
       const statusFinal = (statusRaw && statusRaw !== 'null' && statusRaw !== '') ? statusRaw : 'Indefinido';
-      
-      const isRD = d.fonte_dados === 'RD';
       
       return {
         ...d,
@@ -488,16 +495,22 @@ function App() {
         objetivo_etapa_norm: d.objetivo_etapa || 'Sem Objetivo',
         status_norm: statusFinal,
         fonte_dados: d.fonte_dados, 
-        valor_realizado: !isRD ? valorTotal : 0,
+        valor_realizado: valorRealizado,
         valor_potencial: valorEstimado,
         total_fatura: valorTotal,
-        consumo_mwh: parseFloat(d.consumo_crm_mwh) || parseFloat(d['consumo_médio_na_venda_mwh']) || 0,
-        compensado_kwh: parseFloat(d.compensacao_kwh) || parseFloat(d['compensação_total_kwh']) || 0,
+        consumo_mwh: parseNum(d.consumo_crm_mwh) || parseNum(d['consumo_médio_na_venda_mwh']),
+        compensado_kwh: parseNum(d.compensacao_kwh) || parseNum(d['compensação_total_kwh']),
         data_entrada_norm: dataEntrada,
         data_saida_norm: d.data_cancelamento || d['data_de_pedido_de_cancelamento'],
         vencimento_norm: d.vencimento || d.vencimento_do_boleto,
         data_emissao_norm: d.data_emissao || d.emissão_do_boleto,
-        data_prevista_norm: d.data_emissao_prevista
+        data_prevista_norm: d.data_emissao_prevista,
+        
+        tarifa_estimada: parseNum(d.tarifa_estimada),
+        tarifa_real: parseNum(d.tarifa_real),
+        eficiencia_compensacao: parseNum(d.eficiencia_compensacao),
+        consumo_real_kwh: parseNum(d.consumo_kwh ?? d.consumo_real_kwh),
+        compensacao_real_kwh: parseNum(d.compensacao_kwh ?? d['compensação_total_kwh']) 
       };
     });
   }, [rawData]);
@@ -528,7 +541,7 @@ function App() {
   };
 
   const formatTarifa = (val: number | null) => {
-    if (val === null || val === undefined) return '-';
+    if (val === null || val === undefined || val === 0) return '-';
     return new Intl.NumberFormat('pt-BR', { 
         style: 'currency', 
         currency: 'BRL',
@@ -561,6 +574,7 @@ function App() {
     
   const uniqueConcessionarias = useMemo(() => ['Todas', ...new Set(data.map(d => d.concessionaria_norm).filter(Boolean).sort())], [data]);
   const uniqueAreas = useMemo(() => ['Todas', ...new Set(data.map(d => d.area_norm).filter(Boolean).sort())], [data]);
+  const uniqueEtapasGlobal = useMemo(() => ['Todas', ...new Set(data.map(d => d.objetivo_etapa_norm).filter(Boolean).sort())], [data]);
   const uniqueMesesRef = useMemo(() => {
     const meses = [...new Set(data.map(d => d.mes_norm).filter(Boolean))];
     return ['Todos', ...meses.sort((a, b) => {
@@ -584,6 +598,7 @@ function App() {
       const matchConc = selectedConcessionaria === 'Todas' || item.concessionaria_norm === selectedConcessionaria;
       const matchArea = selectedArea === 'Todas' || item.area_norm === selectedArea;
       const matchMes = selectedMesRef === 'Todos' || item.mes_norm === selectedMesRef;
+      const matchEtapa = selectedEtapa === 'Todas' || item.objetivo_etapa_norm === selectedEtapa;
       
       let matchDateRange = true;
       if (dateRange.from && dateRange.to && item.data_prevista_norm) {
@@ -602,29 +617,30 @@ function App() {
           else matchDateRange = false;
       }
 
-      return matchConc && matchArea && matchMes && matchDateRange;
+      return matchConc && matchArea && matchMes && matchDateRange && matchEtapa;
     });
-  }, [data, selectedConcessionaria, selectedArea, selectedMesRef, dateRange]);
+  }, [data, selectedConcessionaria, selectedArea, selectedEtapa, selectedMesRef, dateRange]);
 
+  // CORREÇÃO: macroMetrics agora soma corretamente as previsões SEM descartar UCs com compensação zero
   const macroMetrics = useMemo(() => {
     const activeData = filteredData;
     const hasStatus = (s: string) => s && s !== 'Indefinido' && s !== 'null' && s.trim() !== '';
 
     const itensRealizados = activeData.filter(d => hasStatus(d.status_norm));
-    const realizadoValor = itensRealizados.reduce((acc, curr) => acc + curr.total_fatura, 0); 
-    const realizadoEnergiaKwh = itensRealizados.reduce((acc, curr) => acc + curr.compensado_kwh, 0);
+    const realizadoValor = itensRealizados.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0); 
+    const realizadoEnergiaKwh = itensRealizados.reduce((acc, curr) => acc + (curr.compensacao_real_kwh || 0), 0);
     const realizadoEnergiaMWh = realizadoEnergiaKwh / 1000;
     const tarifaMediaRealizada = realizadoEnergiaKwh > 0 ? realizadoValor / realizadoEnergiaKwh : 0;
 
-    const itensPendentes = activeData.filter(d => !hasStatus(d.status_norm) && d.total_fatura !== 0 && d.compensado_kwh !== 0);
-    const pendenteValor = itensPendentes.reduce((acc, curr) => acc + curr.total_fatura, 0); 
-    const pendenteEnergiaKwh = itensPendentes.reduce((acc, curr) => acc + curr.compensado_kwh, 0);
+    const itensPendentes = activeData.filter(d => !hasStatus(d.status_norm));
+    const pendenteValor = itensPendentes.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0); 
+    const pendenteEnergiaKwh = itensPendentes.reduce((acc, curr) => acc + ((curr.consumo_mwh || 0) * 1000), 0);
     const pendenteEnergiaMwh = pendenteEnergiaKwh / 1000;
     const tarifaPendente = pendenteEnergiaKwh > 0 ? pendenteValor / pendenteEnergiaKwh : 0;
 
-    const estimadoValor = realizadoValor + pendenteValor;
-    const estimadoEnergiaMwh = realizadoEnergiaMWh + pendenteEnergiaMwh;
-    const qtdEstimado = itensRealizados.length + itensPendentes.length;
+    const estimadoValor = activeData.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0);
+    const estimadoEnergiaMwh = activeData.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0);
+    const qtdEstimado = activeData.length;
     const tarifaMediaEstimada = estimadoEnergiaMwh > 0 ? estimadoValor / (estimadoEnergiaMwh * 1000) : 0;
 
     return { 
@@ -660,7 +676,9 @@ function App() {
     crmData.forEach(d => {
         const matchConc = selectedConcessionaria === 'Todas' || (d.concessionaria || 'Outra') === selectedConcessionaria;
         const matchArea = selectedArea === 'Todas' || (d.area_de_gestao || 'Outros') === selectedArea;
-        if (!matchConc || !matchArea) return;
+        const matchEtapa = selectedEtapa === 'Todas' || (d.objetivo_etapa || 'Sem Etapa') === selectedEtapa;
+        
+        if (!matchConc || !matchArea || !matchEtapa) return;
 
         const dtGanho = parseBrDate(d.data_ganho);
         const dtProt = parseBrDate(d.data_protocolo);
@@ -686,9 +704,8 @@ function App() {
         protEcon: countProtEcon > 0 ? Math.round(sumProtEcon / countProtEcon) : 0,
         econFat: countEconFat > 0 ? Math.round(sumEconFat / countEconFat) : 0
     };
-  }, [crmData, selectedConcessionaria, selectedArea]);
+  }, [crmData, selectedConcessionaria, selectedArea, selectedEtapa]);
 
-  // --- LÓGICA DA AUDITORIA (Com filtros combinados) ---
   const auditData = useMemo(() => {
       const issuesAll: any[] = [];
       let stats = {
@@ -696,11 +713,11 @@ function App() {
           percIntegridade: 0
       };
 
-      // Extração baseada nos filtros Globais
       crmData.forEach(item => {
           const matchConc = selectedConcessionaria === 'Todas' || (item.concessionaria || 'Outra') === selectedConcessionaria;
           const matchArea = selectedArea === 'Todas' || (item.area_de_gestao || 'Outros') === selectedArea;
-          if(!matchConc || !matchArea) return;
+          const matchEtapaGlob = selectedEtapa === 'Todas' || (item.objetivo_etapa || 'Sem Etapa') === selectedEtapa;
+          if(!matchConc || !matchArea || !matchEtapaGlob) return;
 
           stats.totalAnalisados++;
 
@@ -749,15 +766,12 @@ function App() {
           stats.percIntegridade = Math.round(((stats.totalAnalisados - issuesAll.length) / stats.totalAnalisados) * 100);
       }
 
-      // Opções únicas para os dropdowns locais
       const uniqueEtapas = Array.from(new Set(issuesAll.map(i => i.objetivo_etapa || 'Sem Etapa'))).sort();
       const uniqueInconsistencias = Array.from(new Set(issuesAll.flatMap(i => i.missingFields))).sort();
 
-      // Aplicação dos filtros Locais
       const filteredIssues = issuesAll.filter(item => {
           const s = auditSearch.toLowerCase();
           const matchSearch = !s || item.uc?.toLowerCase().includes(s) || item.nome_negocio?.toLowerCase().includes(s);
-          
           const matchEtapa = auditFilterEtapa.length === 0 || auditFilterEtapa.includes(item.objetivo_etapa || 'Sem Etapa');
           const matchInconsistencia = auditFilterInconsistencia.length === 0 || item.missingFields.some((f: string) => auditFilterInconsistencia.includes(f));
 
@@ -769,7 +783,7 @@ function App() {
           stats, 
           options: { etapas: uniqueEtapas, inconsistencias: uniqueInconsistencias } 
       };
-  }, [crmData, selectedConcessionaria, selectedArea, auditSearch, auditFilterEtapa, auditFilterInconsistencia]);
+  }, [crmData, selectedConcessionaria, selectedArea, selectedEtapa, auditSearch, auditFilterEtapa, auditFilterInconsistencia]);
 
   const chartData = useMemo(() => {
     const endDate = selectedMesRef === 'Todos' ? new Date() : endOfMonth(parseRefMonth(selectedMesRef));
@@ -792,6 +806,7 @@ function App() {
        uniqueUCsProfile.forEach(uc => {
           if (selectedConcessionaria !== 'Todas' && uc.concessionaria_norm !== selectedConcessionaria) return;
           if (selectedArea !== 'Todas' && uc.area_norm !== selectedArea) return;
+          if (selectedEtapa !== 'Todas' && uc.objetivo_etapa_norm !== selectedEtapa) return;
           
           const dtProto = parseBrDate(uc.data_entrada_norm);
           const dtCancel = parseBrDate(uc.data_saida_norm);
@@ -820,7 +835,7 @@ function App() {
            growthPct: Number(growthPct.toFixed(1)) 
        };
     });
-  }, [uniqueUCsProfile, selectedConcessionaria, selectedArea, selectedMesRef]);
+  }, [uniqueUCsProfile, selectedConcessionaria, selectedArea, selectedEtapa, selectedMesRef]);
 
   const consumptionChartData = useMemo(() => {
     const endDate = selectedMesRef === 'Todos' ? new Date() : endOfMonth(parseRefMonth(selectedMesRef));
@@ -835,11 +850,12 @@ function App() {
     const validData = data.filter(item => {
         const matchConc = selectedConcessionaria === 'Todas' || item.concessionaria_norm === selectedConcessionaria;
         const matchArea = selectedArea === 'Todas' || item.area_norm === selectedArea;
+        const matchEtapa = selectedEtapa === 'Todas' || item.objetivo_etapa_norm === selectedEtapa;
         
         const s = item.status_norm;
         const isValidStatus = s && s !== 'Indefinido' && s !== 'null' && s.trim() !== '';
 
-        return matchConc && matchArea && isValidStatus;
+        return matchConc && matchArea && matchEtapa && isValidStatus;
     });
 
     let totalValue = 0;
@@ -873,7 +889,7 @@ function App() {
     const tarifaMedia = totalCompensated > 0 ? totalValue / totalCompensated : 0;
 
     return { data: monthlyData, tarifaMedia };
-  }, [data, selectedConcessionaria, selectedArea, selectedMesRef]);
+  }, [data, selectedConcessionaria, selectedArea, selectedEtapa, selectedMesRef]);
 
   const portfolioData = useMemo(() => {
     const allConcessionarias = Array.from(new Set(data.map(d => d.concessionaria_norm).filter(c => c !== 'Outra'))).sort();
@@ -935,9 +951,7 @@ function App() {
             matchStatus = statusInfo.value === opFilterStatus;
         }
 
-        const matchEtapa = opFilterEtapa === 'Todas' || item.objetivo_etapa_norm === opFilterEtapa;
-
-        return matchBusca && matchStatus && matchEtapa;
+        return matchBusca && matchStatus;
     });
 
     if (sortConfig !== null) {
@@ -950,11 +964,42 @@ function App() {
         });
     }
     return filtered;
-  }, [filteredData, searchText, opFilterStatus, opFilterEtapa, sortConfig, selectedMesRef]);
+  }, [filteredData, searchText, opFilterStatus, sortConfig, selectedMesRef]);
 
-  const uniqueEtapasOperational = useMemo(() => {
-      return ['Todas', ...new Set(filteredData.map(d => d.objetivo_etapa_norm).filter(Boolean))].sort();
-  }, [filteredData]);
+  // NOVO: emissaoMetrics garante que os cards da aba Emissão sejam 100% fieis à tabela filtrada
+  const emissaoMetrics = useMemo(() => {
+    const hasStatus = (s: string) => s && s !== 'Indefinido' && s !== 'null' && s.trim() !== '';
+
+    const itensRealizados = operationalData.filter(d => hasStatus(d.status_norm));
+    const realizadoValor = itensRealizados.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0); 
+    const realizadoEnergiaMWh = itensRealizados.reduce((acc, curr) => acc + ((curr.compensacao_real_kwh || 0) / 1000), 0);
+    const tarifaMediaRealizada = (realizadoEnergiaMWh * 1000) > 0 ? realizadoValor / (realizadoEnergiaMWh * 1000) : 0;
+
+    const itensPendentes = operationalData.filter(d => !hasStatus(d.status_norm));
+    const pendenteValor = itensPendentes.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0); 
+    const pendenteEnergiaMwh = itensPendentes.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0);
+    const tarifaPendente = (pendenteEnergiaMwh * 1000) > 0 ? pendenteValor / (pendenteEnergiaMwh * 1000) : 0;
+
+    const estimadoValor = operationalData.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0);
+    const estimadoEnergiaMwh = operationalData.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0);
+    const qtdEstimado = operationalData.length;
+    const tarifaMediaEstimada = (estimadoEnergiaMwh * 1000) > 0 ? estimadoValor / (estimadoEnergiaMwh * 1000) : 0;
+
+    return { 
+        estimado: estimadoValor, 
+        qtdEstimado: qtdEstimado, 
+        energiaEstimada: estimadoEnergiaMwh, 
+        tarifaEstimada: tarifaMediaEstimada,
+        realizado: realizadoValor, 
+        qtdRealizado: itensRealizados.length, 
+        energiaRealizada: realizadoEnergiaMWh, 
+        tarifaRealizada: tarifaMediaRealizada, 
+        pendente: pendenteValor, 
+        qtdPendente: itensPendentes.length, 
+        energiaPendente: pendenteEnergiaMwh, 
+        tarifaPendente: tarifaPendente
+    };
+  }, [operationalData]);
 
   const requestSort = (key: string) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -988,16 +1033,16 @@ function App() {
         const s = crmSearch.toLowerCase();
         const matchSearch = !s || (item.uc && item.uc.toLowerCase().includes(s)) || (item.nome_negocio && item.nome_negocio.toLowerCase().includes(s));
         
-        // CRM aplica tanto os filtros globais (topo) quanto os locais (seus próprios dropdowns)
         const matchConcGlob = selectedConcessionaria === 'Todas' || (item.concessionaria || 'Outra') === selectedConcessionaria;
         const matchAreaGlob = selectedArea === 'Todas' || (item.area_de_gestao || 'Outros') === selectedArea;
+        const matchEtapaGlob = selectedEtapa === 'Todas' || (item.objetivo_etapa || 'Sem Etapa') === selectedEtapa;
 
         const matchConc = crmFilterConcessionaria.length === 0 || crmFilterConcessionaria.includes(item.concessionaria || 'Outra');
         const matchArea = crmFilterArea.length === 0 || crmFilterArea.includes(item.area_de_gestao || 'Outros');
         const matchEtapa = crmFilterEtapa.length === 0 || crmFilterEtapa.includes(item.objetivo_etapa || 'Sem Etapa');
         const matchStatus = crmFilterStatus.length === 0 || crmFilterStatus.includes(item.status_rd || 'Sem Status');
         
-        return matchSearch && matchConcGlob && matchAreaGlob && matchConc && matchArea && matchEtapa && matchStatus;
+        return matchSearch && matchConcGlob && matchAreaGlob && matchEtapaGlob && matchConc && matchArea && matchEtapa && matchStatus;
     });
 
     const sumMwh = (arr: any[]) => arr.reduce((acc, curr) => acc + (Number(curr.consumo_medio_mwh) || 0), 0);
@@ -1022,7 +1067,7 @@ function App() {
     };
 
     return { filtered, stats, options: { concessionarias: concessionariasRaw, areas: areasRaw, etapas: etapasSorted, status: statusRaw } };
-  }, [crmData, crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus, selectedConcessionaria, selectedArea]);
+  }, [crmData, crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus, selectedConcessionaria, selectedArea, selectedEtapa]);
 
   const financialGroups = useMemo(() => {
     const normalize = (st: string) => (st || '').toUpperCase();
@@ -1118,9 +1163,10 @@ function App() {
     );
   }
 
-  // --- DADOS PAGINADOS ---
   const paginatedEmissaoData = operationalData.slice((emissaoPage - 1) * ITEMS_PER_PAGE, emissaoPage * ITEMS_PER_PAGE);
   const totalEmissaoPages = Math.ceil(operationalData.length / ITEMS_PER_PAGE);
+  
+  // Totalizadores cravados baseados no que está filtrado e desenhado na tabela
   const totalEmissaoEstimado = operationalData.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0);
   const totalEmissaoRealizado = operationalData.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0);
 
@@ -1132,7 +1178,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans p-6 pb-20">
-      {/* HEADER */}
       <header className="flex flex-col md:flex-row items-center justify-between mb-8 border-b border-slate-800 pb-6 gap-6">
         <div className="flex items-center gap-4">
           <img 
@@ -1166,94 +1211,88 @@ function App() {
         </div>
       </header>
 
-      {/* --- FILTROS NO TOPO UNIFICADOS --- */}
-      {(currentTab === 'geral' || currentTab === 'financeiro' || currentTab === 'emissao' || currentTab === 'auditoria' || currentTab === 'crm') && (
-        <section className={`grid gap-4 mb-8 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm animate-in fade-in zoom-in duration-300 
-            ${currentTab === 'crm' || currentTab === 'auditoria' ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-4'}`}>
-            
-            {/* Filtros Base (Sempre presentes exceto CRM que tem os próprios MultiSelects) */}
-            {currentTab !== 'crm' && (
-                <>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
-                        <div className="relative"><select value={selectedConcessionaria} onChange={e => setSelectedConcessionaria(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueConcessionarias.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
-                        <div className="relative"><select value={selectedArea} onChange={e => setSelectedArea(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueAreas.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                    </div>
-                </>
-            )}
+      {/* --- FILTROS GLOBAIS NO TOPO UNIFICADOS --- */}
+      {currentTab !== 'carteira' && currentTab !== 'localizacao' && (
+      <section className={`grid gap-4 mb-8 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm animate-in fade-in zoom-in duration-300 grid-cols-1 sm:grid-cols-2 md:grid-cols-5`}>
+        
+        {currentTab !== 'crm' && (
+            <>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
+                    <div className="relative"><select value={selectedConcessionaria} onChange={e => setSelectedConcessionaria(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueConcessionarias.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
+                    <div className="relative"><select value={selectedArea} onChange={e => setSelectedArea(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueAreas.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Etapa</label>
+                    <div className="relative"><select value={selectedEtapa} onChange={e => setSelectedEtapa(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueEtapasGlobal.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                </div>
+            </>
+        )}
 
-            {/* Filtros de Data (Apenas Geral, Financeiro, Emissão) */}
-            {(currentTab === 'geral' || currentTab === 'financeiro' || currentTab === 'emissao') && (
-                <>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Mês Referência</label>
-                        <div className="relative"><select value={selectedMesRef} onChange={e => setSelectedMesRef(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueMesesRef.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><CalendarIcon size={12}/> Período de Emissão Prevista</label>
-                        <DateRangePicker selectedRange={dateRange} onChange={setDateRange} />
-                    </div>
-                </>
-            )}
+        {(currentTab === 'geral' || currentTab === 'financeiro' || currentTab === 'emissao') && (
+            <>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Mês Referência</label>
+                  <div className="relative"><select value={selectedMesRef} onChange={e => setSelectedMesRef(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:border-slate-600 transition-colors">{uniqueMesesRef.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><CalendarIcon size={12}/> Período de Emissão Prevista</label>
+                    <DateRangePicker selectedRange={dateRange} onChange={setDateRange} />
+                </div>
+            </>
+        )}
 
-            {/* Filtros Auditoria no Topo */}
-            {currentTab === 'auditoria' && (
-                <>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Search size={12}/> Buscar UC/Negócio</label>
-                        <input type="text" value={auditSearch} onChange={e => setAuditSearch(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600" placeholder="Buscar..."/>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Status/Etapa</label>
-                        <MultiSelect fullWidth options={auditData.options.etapas} selected={auditFilterEtapa} onChange={setAuditFilterEtapa} placeholder="Todas as Etapas" />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Inconsistência</label>
-                        <MultiSelect fullWidth options={auditData.options.inconsistencias} selected={auditFilterInconsistencia} onChange={setAuditFilterInconsistencia} placeholder="Qualquer Inconsistência" />
-                    </div>
-                </>
-            )}
+        {currentTab === 'auditoria' && (
+            <>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Search size={12}/> Buscar UC/Negócio</label>
+                  <input type="text" value={auditSearch} onChange={e => setAuditSearch(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600" placeholder="Buscar..."/>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Inconsistência</label>
+                  <MultiSelect fullWidth options={auditData.options.inconsistencias} selected={auditFilterInconsistencia} onChange={setAuditFilterInconsistencia} placeholder="Qualquer Inconsistência" />
+                </div>
+            </>
+        )}
 
-            {/* Filtros CRM no Topo */}
-            {currentTab === 'crm' && (
-                <>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Search size={12}/> Buscar UC/Nome</label>
-                        <div className="relative group w-full">
-                            <Search className="absolute left-3 top-2.5 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={16}/>
-                            <input type="text" placeholder="Buscar..." value={crmSearch} onChange={e => setCrmSearch(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600" />
-                        </div>
+        {currentTab === 'crm' && (
+            <>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Search size={12}/> Buscar UC/Nome</label>
+                    <div className="relative group w-full">
+                        <Search className="absolute left-3 top-2.5 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={16}/>
+                        <input type="text" placeholder="Buscar..." value={crmSearch} onChange={e => setCrmSearch(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600" />
                     </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
-                        <MultiSelect options={crmProcessed.options.concessionarias.filter((o: string) => o !== 'Todas')} selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Todas" fullWidth />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
-                        <MultiSelect options={crmProcessed.options.areas.filter((o: string) => o !== 'Todas')} selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Todas" fullWidth />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Etapa</label>
-                        <MultiSelect options={crmProcessed.options.etapas.filter((o: string) => o !== 'Todas')} selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Todas" fullWidth />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Status RD</label>
-                        <MultiSelect options={crmProcessed.options.status.filter((o: string) => o !== 'Todos')} selected={crmFilterStatus} onChange={setCrmFilterStatus} placeholder="Todos" fullWidth />
-                    </div>
-                </>
-            )}
-        </section>
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
+                    <MultiSelect options={crmProcessed.options.concessionarias.filter((o: string) => o !== 'Todas')} selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Todas" fullWidth />
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
+                    <MultiSelect options={crmProcessed.options.areas.filter((o: string) => o !== 'Todas')} selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Todas" fullWidth />
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Etapa</label>
+                    <MultiSelect options={crmProcessed.options.etapas.filter((o: string) => o !== 'Todas')} selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Todas" fullWidth />
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Status RD</label>
+                    <MultiSelect options={crmProcessed.options.status.filter((o: string) => o !== 'Todos')} selected={crmFilterStatus} onChange={setCrmFilterStatus} placeholder="Todos" fullWidth />
+                </div>
+            </>
+        )}
+      </section>
       )}
 
-      {/* --- ABA 1: VISÃO GERAL --- */}
       {currentTab === 'geral' && (
           <div className="animate-in fade-in zoom-in duration-300">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                   {[
-                      { title: 'Total UCs (Filtro)', value: generalMetrics.totalUCs, sub: 'Unidades Consumidoras', icon: Users, color: 'blue' },
+                      { title: 'Total UCs (Filtro)', value: new Intl.NumberFormat('pt-BR').format(generalMetrics.totalUCs), sub: 'Unidades Consumidoras', icon: Users, color: 'blue' },
                       { title: 'Energia Gerida', value: formatEnergySmart(generalMetrics.totalEnergy, 'MWh'), sub: 'Total Acumulado', icon: Zap, color: 'emerald' },
                       { title: 'Receita do Período', value: formatMoney(generalMetrics.totalRevenue), sub: 'Faturado + Pendente', icon: DollarSign, color: 'amber' },
                       { title: 'Ticket Médio', value: formatMoney(generalMetrics.avgTicket), sub: 'Por Cliente', icon: PieChart, color: 'purple' }
@@ -1389,7 +1428,6 @@ function App() {
           </div>
       )}
 
-      {/* --- ABA 2: FINANCEIRO --- */}
       {currentTab === 'financeiro' && (
           <div className="animate-in fade-in zoom-in duration-300">
              <div>
@@ -1425,7 +1463,6 @@ function App() {
           </div>
       )}
 
-      {/* --- ABA 3: EMISSÃO --- */}
       {currentTab === 'emissao' && (
         <div className="animate-in fade-in zoom-in duration-300 space-y-8">
             <div>
@@ -1435,12 +1472,12 @@ function App() {
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
                     <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturamento Potencial</h3>
                     <div className="relative z-10">
-                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-white tracking-tight">{formatMoney(macroMetrics.estimado)}</h2>
+                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-white tracking-tight">{formatMoney(emissaoMetrics.estimado)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
-                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdEstimado} UCs</span>
-                        <span className="text-emerald-300 bg-emerald-950 border border-emerald-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaEstimada, 'MWh')}</span>
+                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{new Intl.NumberFormat('pt-BR').format(emissaoMetrics.qtdEstimado)} UCs</span>
+                        <span className="text-emerald-300 bg-emerald-950 border border-emerald-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(emissaoMetrics.energiaEstimada, 'MWh')}</span>
                         <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Estimada">
-                            <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaEstimada)}/kWh
+                            <DollarSign size={12}/> {formatTarifa(emissaoMetrics.tarifaEstimada)}/kWh
                         </span>
                         </div>
                     </div>
@@ -1450,12 +1487,12 @@ function App() {
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-blue-500 rounded-full"><FileText size={120} /></div>
                     <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturamento Realizado</h3>
                     <div className="relative z-10">
-                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-blue-500 tracking-tight">{formatMoney(macroMetrics.realizado)}</h2>
+                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-blue-500 tracking-tight">{formatMoney(emissaoMetrics.realizado)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
-                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdRealizado} UCs</span>
-                        <span className="text-yellow-300 bg-yellow-950 border border-yellow-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaRealizada, 'MWh')}</span>
+                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{new Intl.NumberFormat('pt-BR').format(emissaoMetrics.qtdRealizado)} UCs</span>
+                        <span className="text-yellow-300 bg-yellow-950 border border-yellow-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(emissaoMetrics.energiaRealizada, 'MWh')}</span>
                         <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Realizada">
-                            <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaRealizada)}/kWh
+                            <DollarSign size={12}/> {formatTarifa(emissaoMetrics.tarifaRealizada)}/kWh
                         </span>
                         </div>
                     </div>
@@ -1465,12 +1502,12 @@ function App() {
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-amber-500 rounded-full"><Clock size={120} /></div>
                     <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Pendente</h3>
                     <div className="relative z-10">
-                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-amber-500 tracking-tight">{formatMoney(macroMetrics.pendente)}</h2>
+                        <h2 className="text-3xl md:text-4xl font-display font-extrabold text-amber-500 tracking-tight">{formatMoney(emissaoMetrics.pendente)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
-                            <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md font-medium">{macroMetrics.qtdPendente} UCs</span>
-                            <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(macroMetrics.energiaPendente, 'MWh')}</span>
+                            <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md font-medium">{new Intl.NumberFormat('pt-BR').format(emissaoMetrics.qtdPendente)} UCs</span>
+                            <span className="text-amber-200 bg-amber-950 border border-amber-900 px-2.5 py-1 rounded-md flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(emissaoMetrics.energiaPendente, 'MWh')}</span>
                             <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Pendente">
-                                <DollarSign size={12}/> {formatTarifa(macroMetrics.tarifaPendente)}/kWh
+                                <DollarSign size={12}/> {formatTarifa(emissaoMetrics.tarifaPendente)}/kWh
                             </span>
                         </div>
                     </div>
@@ -1479,47 +1516,48 @@ function App() {
             </div>
 
           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col">
-             <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900/50">
+             <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50">
                <div>
                  <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><CalendarIcon className="text-blue-500" size={24}/> Previsão vs Realizado</h2>
                  <p className="text-sm text-slate-400">Acompanhamento de emissão de faturas</p>
                </div>
-               <div className="relative flex flex-wrap items-center gap-4">
-                 <div className="relative group">
-                    <Search className="absolute left-2.5 top-2.5 text-slate-500 group-focus-within:text-blue-400" size={16}/>
-                    <input 
-                       type="text" 
-                       value={searchText}
-                       onChange={e => setSearchText(e.target.value)}
-                       placeholder="Buscar UC ou Nome" 
-                       className="bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 transition-all w-60"
-                    />
-                 </div>
-                 
-                 <div className="relative">
-                    <select 
-                      value={opFilterEtapa} 
-                      onChange={e => setOpFilterEtapa(e.target.value)} 
-                      className="bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 cursor-pointer w-40"
-                    >
-                        {uniqueEtapasOperational.map(etapa => (
-                            <option key={etapa} value={etapa}>{etapa === 'Todas' ? 'Etapa: Todas' : etapa}</option>
-                        ))}
-                    </select>
-                 </div>
+               
+               <div className="flex flex-wrap items-center justify-between w-full lg:w-auto gap-4 flex-1 lg:ml-8">
+                   <div className="flex flex-wrap items-center gap-3">
+                     <div className="relative group">
+                        <Search className="absolute left-2.5 top-2.5 text-slate-500 group-focus-within:text-blue-400" size={16}/>
+                        <input 
+                           type="text" 
+                           value={searchText}
+                           onChange={e => setSearchText(e.target.value)}
+                           placeholder="Buscar UC ou Nome" 
+                           className="bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 transition-all w-60"
+                        />
+                     </div>
 
-                 <div className="relative">
-                    <select 
-                      value={opFilterStatus} 
-                      onChange={e => setOpFilterStatus(e.target.value)} 
-                      className="bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 cursor-pointer w-40"
-                    >
-                        <option value="Todos">Status: Todos</option>
-                        <option value="Concluído">Concluído</option>
-                        <option value="Atrasado">Atrasado</option>
-                        <option value="No Prazo">No Prazo</option>
-                    </select>
-                 </div>
+                     <div className="relative">
+                        <select 
+                          value={opFilterStatus} 
+                          onChange={e => setOpFilterStatus(e.target.value)} 
+                          className="bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 cursor-pointer w-40"
+                        >
+                            <option value="Todos">Status: Todos</option>
+                            <option value="Concluído">Concluído</option>
+                            <option value="Atrasado">Atrasado</option>
+                            <option value="No Prazo">No Prazo</option>
+                        </select>
+                     </div>
+                   </div>
+
+                   <div className="w-full sm:w-auto ml-auto z-20">
+                       <MultiSelect 
+                          options={emissaoColunasOptions} 
+                          selected={emissaoColunas} 
+                          onChange={setEmissaoColunas} 
+                          placeholder="Colunas Opcionais" 
+                          icon={Settings2}
+                       />
+                   </div>
                </div>
              </div>
              
@@ -1533,27 +1571,46 @@ function App() {
                  <div className="flex flex-col flex-1">
                     <div className="overflow-x-auto min-h-[400px]">
                         <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold tracking-wider border-b border-slate-800">
+                        <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold tracking-wider border-b border-slate-800 whitespace-nowrap">
                             <tr>
-                            <th className="px-6 py-4">UC / Cliente</th>
-                            <th className="px-6 py-4">Distribuidora</th>
-                            <th className="px-6 py-4">Etapa</th>
-                            <th className="px-6 py-4">Data Prevista</th>
-                            <th className="px-6 py-4">Data Emissão (Real)</th>
-                            <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('valor_potencial')}>
-                                <div className="flex items-center justify-end gap-1">Valor Estimado <ArrowUpDown size={14}/></div>
-                            </th>
-                            <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('valor_realizado')}>
-                                <div className="flex items-center justify-end gap-1">Valor Realizado <ArrowUpDown size={14}/></div>
-                            </th>
-                            <th className="px-6 py-4 text-center">Status</th>
+                                <th className="px-6 py-4">UC / Cliente</th>
+                                <th className="px-6 py-4">Distribuidora</th>
+                                <th className="px-6 py-4">Etapa</th>
+                                <th className="px-6 py-4">Data Prevista</th>
+                                <th className="px-6 py-4">Data Emissão (Real)</th>
+                                
+                                {emissaoColunas.includes('Consumo RD (kWh)') && <th className="px-6 py-4 text-right text-blue-400 bg-blue-900/10">Cons. RD (kWh)</th>}
+                                {emissaoColunas.includes('Tarifa RD (Estimada)') && <th className="px-6 py-4 text-right text-blue-400 bg-blue-900/10">Tarifa RD</th>}
+                                {emissaoColunas.includes('Tarifa Fatura (Real)') && <th className="px-6 py-4 text-right text-emerald-400 bg-emerald-900/10">Tarifa Real</th>}
+                                {emissaoColunas.includes('Consumo (Fatura)') && <th className="px-6 py-4 text-right text-emerald-400 bg-emerald-900/10">Cons. Fatura</th>}
+                                {emissaoColunas.includes('Compensação (Fatura)') && <th className="px-6 py-4 text-right text-emerald-400 bg-emerald-900/10">Compensação</th>}
+                                {emissaoColunas.includes('Eficiência (%)') && <th className="px-6 py-4 text-center text-emerald-400 bg-emerald-900/10">Eficiência</th>}
+
+                                <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('valor_potencial')}>
+                                    <div className="flex items-center justify-end gap-1">Valor Estimado <ArrowUpDown size={14}/></div>
+                                </th>
+                                <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('valor_realizado')}>
+                                    <div className="flex items-center justify-end gap-1">Valor Realizado <ArrowUpDown size={14}/></div>
+                                </th>
+                                <th className="px-6 py-4 text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                             {paginatedEmissaoData.map((row: any) => {
                             const status = getStatusColor(row.data_prevista_norm, row.data_emissao_norm);
+                            
+                            const eficPercent = row.eficiencia_compensacao * 100;
+                            let eficColor = 'text-rose-400';
+                            let eficBg = 'bg-rose-900/40 border-rose-800/50';
+                            
+                            if (eficPercent >= 90) { eficColor = 'text-emerald-400'; eficBg = 'bg-emerald-900/40 border-emerald-800/50'; }
+                            else if (eficPercent >= 70) { eficColor = 'text-yellow-400'; eficBg = 'bg-yellow-900/40 border-yellow-800/50'; }
+
+                            // Mostra a eficiência zerada se tiver fatura ou se estiver atrasado, caso contrário esconde (-)
+                            const isMeasuredEfic = row.status_norm === 'Concluído' || row.status_norm === 'Atrasado' || row.consumo_real_kwh > 0 || row.compensacao_real_kwh > 0;
+
                             return (
-                                <tr key={`${row.uc}-${row.mes_norm}`} className="hover:bg-slate-800/50 transition-colors">
+                                <tr key={`${row.uc}-${row.mes_norm}`} className="hover:bg-slate-800/50 transition-colors whitespace-nowrap">
                                 <td className="px-6 py-4">
                                     <div className="font-mono text-slate-200">{row.uc}</div>
                                     <div className="text-xs text-slate-500 truncate max-w-[200px]" title={row.nome}>{row.nome}</div>
@@ -1567,6 +1624,42 @@ function App() {
 
                                 <td className="px-6 py-4 font-medium text-slate-300">{toDateBR(row.data_prevista_norm)}</td>
                                 <td className="px-6 py-4 text-slate-400">{toDateBR(row.data_emissao_norm)}</td>
+                                
+                                {emissaoColunas.includes('Consumo RD (kWh)') && (
+                                    <td className="px-6 py-4 text-right font-mono text-blue-300 bg-blue-900/10 border-l border-slate-800/50">
+                                        {new Intl.NumberFormat('pt-BR').format(Math.round(row.consumo_mwh * 1000))} <span className="text-[10px]">kWh</span>
+                                    </td>
+                                )}
+                                {emissaoColunas.includes('Tarifa RD (Estimada)') && (
+                                    <td className="px-6 py-4 text-right font-mono text-blue-300 bg-blue-900/10">
+                                        {formatTarifa(row.tarifa_estimada)}
+                                    </td>
+                                )}
+                                {emissaoColunas.includes('Tarifa Fatura (Real)') && (
+                                    <td className="px-6 py-4 text-right font-mono text-emerald-300 bg-emerald-900/10 border-l border-slate-800/50">
+                                        {formatTarifa(row.tarifa_real)}
+                                    </td>
+                                )}
+                                {emissaoColunas.includes('Consumo (Fatura)') && (
+                                    <td className="px-6 py-4 text-right font-mono text-emerald-300 bg-emerald-900/10">
+                                        {new Intl.NumberFormat('pt-BR').format(row.consumo_real_kwh)} <span className="text-[10px]">kWh</span>
+                                    </td>
+                                )}
+                                {emissaoColunas.includes('Compensação (Fatura)') && (
+                                    <td className="px-6 py-4 text-right font-mono text-emerald-300 bg-emerald-900/10">
+                                        {new Intl.NumberFormat('pt-BR').format(row.compensacao_real_kwh)} <span className="text-[10px]">kWh</span>
+                                    </td>
+                                )}
+                                {emissaoColunas.includes('Eficiência (%)') && (
+                                    <td className="px-6 py-4 text-center bg-emerald-900/10 border-r border-slate-800/50">
+                                        {isMeasuredEfic ? (
+                                            <span className={`px-2 py-1 rounded text-xs font-bold border ${eficColor} ${eficBg}`}>
+                                                {eficPercent.toFixed(1)}%
+                                            </span>
+                                        ) : <span className="text-slate-500">-</span>}
+                                    </td>
+                                )}
+
                                 <td className="px-6 py-4 text-right font-medium text-blue-400">{formatMoney(row.valor_potencial)}</td>
                                 <td className="px-6 py-4 text-right font-bold text-emerald-400">
                                     {row.valor_realizado > 0 ? formatMoney(row.valor_realizado) : <span className="text-slate-600">-</span>}
@@ -1578,12 +1671,20 @@ function App() {
                             );
                             })}
                             {paginatedEmissaoData.length === 0 && (
-                            <tr><td colSpan={8} className="text-center py-12 text-slate-500">Nenhum dado encontrado para os filtros selecionados.</td></tr>
+                            <tr><td colSpan={8 + emissaoColunas.length} className="text-center py-12 text-slate-500">Nenhum dado encontrado para os filtros selecionados.</td></tr>
                             )}
                         </tbody>
                         <tfoot className="bg-slate-900 border-t-2 border-slate-700 font-bold text-slate-200">
                             <tr>
-                                <td colSpan={5} className="px-6 py-4 text-right font-display uppercase text-xs tracking-wider text-slate-500">Total (Registros Filtrados)</td>
+                                <td colSpan={5} className="px-6 py-4 text-right font-display uppercase text-xs tracking-wider text-slate-500">Total Filtrado</td>
+                                
+                                {emissaoColunas.includes('Consumo RD (kWh)') && <td></td>}
+                                {emissaoColunas.includes('Tarifa RD (Estimada)') && <td></td>}
+                                {emissaoColunas.includes('Tarifa Fatura (Real)') && <td></td>}
+                                {emissaoColunas.includes('Consumo (Fatura)') && <td></td>}
+                                {emissaoColunas.includes('Compensação (Fatura)') && <td></td>}
+                                {emissaoColunas.includes('Eficiência (%)') && <td></td>}
+
                                 <td className="px-6 py-4 text-right text-blue-400 text-base">{formatMoney(totalEmissaoEstimado)}</td>
                                 <td className="px-6 py-4 text-right text-emerald-400 text-base border-r border-slate-800">{formatMoney(totalEmissaoRealizado)}</td>
                                 <td></td>
@@ -1598,7 +1699,6 @@ function App() {
         </div>
       )}
 
-      {/* ABA CARTEIRA */}
       {currentTab === 'carteira' && (
         <div className="animate-in fade-in zoom-in duration-300">
             <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden">
@@ -1620,10 +1720,10 @@ function App() {
                             </tr>
                             <tr className="bg-blue-950 text-slate-300">
                                 {portfolioData.allConcessionarias.map((conc: string) => (
-                                    <>
-                                        <th key={`${conc}-ucs`} className="p-2 border border-slate-700 text-center w-16">UCs</th>
-                                        <th key={`${conc}-mwh`} className="p-2 border border-slate-700 text-center w-16 text-yellow-300/80">MWh</th>
-                                    </>
+                                    <th key={`${conc}-ucs`} className="p-2 border border-slate-700 text-center w-16">UCs</th>
+                                ))}
+                                {portfolioData.allConcessionarias.map((conc: string) => (
+                                    <th key={`${conc}-mwh`} className="p-2 border border-slate-700 text-center w-16 text-yellow-300/80">MWh</th>
                                 ))}
                                 <th className="p-2 border border-slate-700 text-center w-16 bg-slate-800">UCs</th>
                                 <th className="p-2 border border-slate-700 text-center w-16 bg-slate-800 text-yellow-300/80">MWh</th>
@@ -1725,7 +1825,6 @@ function App() {
         </div>
       )}
 
-      {/* --- ABA CRM --- */}
       {currentTab === 'crm' && (
         <div className="animate-in fade-in zoom-in duration-300 flex flex-col gap-6">
             {crmProcessed.stats && (
@@ -1837,12 +1936,10 @@ function App() {
         </div>
       )}
 
-      {/* --- ABA AUDITORIA --- */}
       {currentTab === 'auditoria' && (
         <div className="animate-in fade-in zoom-in duration-300 flex flex-col gap-6">
             {auditData && (
                 <>
-                {/* KPIs de Auditoria */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg p-6 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-6 opacity-10"><ClipboardList size={80} className="text-blue-500"/></div>
@@ -1863,7 +1960,6 @@ function App() {
                     </div>
                 </div>
 
-                {/* Tabela de Auditoria com Paginação e CSV */}
                 <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col mt-4">
                     <div className="p-5 border-b border-slate-800 bg-slate-900/50 flex flex-col md:flex-row justify-between items-center gap-4">
                         <div>
@@ -1955,7 +2051,6 @@ function App() {
         </div>
       )}
 
-      {/* --- ABA LOCALIZAÇÃO --- */}
       {currentTab === 'localizacao' && (
         <div className="animate-in fade-in zoom-in duration-300 h-[calc(100vh-200px)] flex flex-col">
             <div className="bg-slate-900 p-4 rounded-t-2xl border border-slate-800 border-b-0 flex flex-wrap gap-3 items-center z-10">
