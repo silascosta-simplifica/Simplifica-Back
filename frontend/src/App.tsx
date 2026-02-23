@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useAnalytics } from './hooks/useAnalytics';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -303,7 +303,8 @@ const CrmKpiCard = ({ title, count, mwh, color = "blue" }: any) => {
         amber: "text-amber-400 border-amber-500/30 bg-amber-500/10",
         rose: "text-rose-400 border-rose-500/30 bg-rose-500/10",
         purple: "text-purple-400 border-purple-500/30 bg-purple-500/10",
-        slate: "text-slate-400 border-slate-500/30 bg-slate-500/10"
+        slate: "text-slate-400 border-slate-500/30 bg-slate-500/10",
+        indigo: "text-indigo-400 border-indigo-500/30 bg-indigo-500/10"
     };
     
     let dynamicColor = color;
@@ -317,7 +318,7 @@ const CrmKpiCard = ({ title, count, mwh, color = "blue" }: any) => {
     const activeClass = colorClasses[dynamicColor] || colorClasses.slate;
 
     return (
-        <div className={`p-4 rounded-xl border ${activeClass} flex flex-col justify-between min-w-[180px] flex-1 shadow-sm`}>
+        <div className={`p-4 rounded-xl border ${activeClass} flex flex-col justify-between min-w-[160px] flex-1 shadow-sm`}>
             <p className="text-[10px] font-bold font-display uppercase tracking-wider opacity-80 mb-2 truncate" title={title}>{title}</p>
             <div>
                 <p className="text-2xl font-bold font-display text-white">{count}</p>
@@ -436,11 +437,12 @@ function App() {
   // Filtros Emissão
   const [searchText, setSearchText] = useState('');
   const [opFilterStatus, setOpFilterStatus] = useState('Todos'); 
+  const [opFilterEtapa, setOpFilterEtapa] = useState('Todas'); 
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null); 
   const [emissaoPage, setEmissaoPage] = useState(1);
   const [emissaoColunas, setEmissaoColunas] = useState<string[]>([]);
   
-  const emissaoColunasOptions = ['Consumo RD (kWh)', 'Tarifa RD (Estimada)', 'Tarifa Fatura (Real)', 'Consumo (Fatura)', 'Compensação (Fatura)', 'Eficiência (%)'];
+  const emissaoColunasOptions = ['Consumo RD (kWh)', 'Tarifa RD (Estimada)', 'Tarifa Fatura (Real)', 'Consumo (Fatura)', 'Compensação (Fatura)', 'Eficiência (%)', 'Status Pagamento'];
 
   // Filtros CRM
   const [crmSearch, setCrmSearch] = useState('');
@@ -458,9 +460,9 @@ function App() {
 
   const ITEMS_PER_PAGE = 20;
 
-  useEffect(() => { setEmissaoPage(1); }, [searchText, opFilterStatus, selectedEtapa, selectedMesRef, selectedConcessionaria, selectedArea, dateRange]);
-  useEffect(() => { setAuditPage(1); }, [auditSearch, auditFilterEtapa, auditFilterInconsistencia, selectedConcessionaria, selectedArea, selectedEtapa]);
-  useEffect(() => { setCrmPage(1); }, [crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus, selectedConcessionaria, selectedArea, selectedEtapa]);
+  useEffect(() => { setEmissaoPage(1); }, [searchText, opFilterStatus, opFilterEtapa, selectedMesRef, selectedConcessionaria, selectedArea, dateRange]);
+  useEffect(() => { setAuditPage(1); }, [auditSearch, auditFilterEtapa, auditFilterInconsistencia, selectedConcessionaria, selectedArea]);
+  useEffect(() => { setCrmPage(1); }, [crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus]);
 
   const data = useMemo(() => {
     if (!rawData) return [];
@@ -564,25 +566,30 @@ function App() {
     } catch { return '-'; }
   };
 
-  // NOVA REGRA DE STATUS DA ABA EMISSÃO (Foco na Emissão do documento)
   const getStatusColor = (prevista: string | null, real: string | null, valorRealizado: number) => {
-    // Se tem Data Real de Emissão ou se existe algum Valor cobrado pela concessionária -> EMITIDO
     if (real || valorRealizado > 0) return { color: 'text-emerald-400', bg: 'bg-emerald-900/30 border border-emerald-800', text: 'Emitido', value: 'Emitido' };
-    
-    // Se não tem nada previsto -> Ignora
     if (!prevista) return { color: 'text-gray-500', bg: 'bg-transparent', text: '-', value: 'Aguardando' };
-    
     const hoje = new Date().toISOString().split('T')[0];
-    // Se hoje já passou da data limite que esperávamos a fatura -> ATRASADO
     if (hoje > prevista) return { color: 'text-red-300', bg: 'bg-red-900/40 border border-red-800', text: 'Atrasado', value: 'Atrasado' };
-    
-    // Se não emitiu ainda, mas estamos dentro do prazo -> AGUARDANDO
     return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'Aguardando', value: 'Aguardando' };
+  };
+
+  const getPaymentBadge = (status: string) => {
+    const sNorm = (status || '').toUpperCase();
+    if (['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH', 'PAID', 'LIQUIDATED'].includes(sNorm)) return { color: 'text-emerald-400', bg: 'bg-emerald-900/30 border-emerald-800', text: 'Pago' };
+    if (['OVERDUE', 'LATE'].includes(sNorm)) return { color: 'text-rose-400', bg: 'bg-rose-900/40 border-rose-800', text: 'Atrasado' };
+    if (['SENT', 'OPEN', 'AWAITING_PAYMENT', 'PENDING'].includes(sNorm)) return { color: 'text-blue-400', bg: 'bg-blue-900/30 border-blue-800', text: 'Aberto' };
+    return { color: 'text-slate-500', bg: 'bg-transparent', text: '-' };
   };
     
   const uniqueConcessionarias = useMemo(() => ['Todas', ...new Set(data.map(d => d.concessionaria_norm).filter(Boolean).sort())], [data]);
   const uniqueAreas = useMemo(() => ['Todas', ...new Set(data.map(d => d.area_norm).filter(Boolean).sort())], [data]);
   const uniqueEtapasGlobal = useMemo(() => ['Todas', ...new Set(data.map(d => d.objetivo_etapa_norm).filter(Boolean).sort())], [data]);
+  
+  const uniqueEtapasOperational = useMemo(() => {
+    return ['Todas', ...new Set(data.map(d => d.objetivo_etapa_norm).filter(Boolean))].sort();
+  }, [data]);
+
   const uniqueMesesRef = useMemo(() => {
     const meses = [...new Set(data.map(d => d.mes_norm).filter(Boolean))];
     return ['Todos', ...meses.sort((a, b) => {
@@ -956,8 +963,10 @@ function App() {
             const statusInfo = getStatusColor(item.data_prevista_norm, item.data_emissao_norm, item.valor_realizado);
             matchStatus = statusInfo.value === opFilterStatus;
         }
+        
+        const matchEtapa = opFilterEtapa === 'Todas' || item.objetivo_etapa_norm === opFilterEtapa;
 
-        return matchBusca && matchStatus;
+        return matchBusca && matchStatus && matchEtapa;
     });
 
     if (sortConfig !== null) {
@@ -970,9 +979,8 @@ function App() {
         });
     }
     return filtered;
-  }, [filteredData, searchText, opFilterStatus, sortConfig, selectedMesRef]);
+  }, [filteredData, searchText, opFilterStatus, opFilterEtapa, sortConfig, selectedMesRef]);
 
-  // Cards de Faturamento agora usam exatamente a mesma palavra chave: "Emitido"
   const emissaoMetrics = useMemo(() => {
     const itensRealizados = operationalData.filter(d => {
         const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
@@ -1045,16 +1053,12 @@ function App() {
         const s = crmSearch.toLowerCase();
         const matchSearch = !s || (item.uc && item.uc.toLowerCase().includes(s)) || (item.nome_negocio && item.nome_negocio.toLowerCase().includes(s));
         
-        const matchConcGlob = selectedConcessionaria === 'Todas' || (item.concessionaria || 'Outra') === selectedConcessionaria;
-        const matchAreaGlob = selectedArea === 'Todas' || (item.area_de_gestao || 'Outros') === selectedArea;
-        const matchEtapaGlob = selectedEtapa === 'Todas' || (item.objetivo_etapa || 'Sem Etapa') === selectedEtapa;
-
         const matchConc = crmFilterConcessionaria.length === 0 || crmFilterConcessionaria.includes(item.concessionaria || 'Outra');
         const matchArea = crmFilterArea.length === 0 || crmFilterArea.includes(item.area_de_gestao || 'Outros');
         const matchEtapa = crmFilterEtapa.length === 0 || crmFilterEtapa.includes(item.objetivo_etapa || 'Sem Etapa');
         const matchStatus = crmFilterStatus.length === 0 || crmFilterStatus.includes(item.status_rd || 'Sem Status');
         
-        return matchSearch && matchConcGlob && matchAreaGlob && matchEtapaGlob && matchConc && matchArea && matchEtapa && matchStatus;
+        return matchSearch && matchConc && matchArea && matchEtapa && matchStatus;
     });
 
     const sumMwh = (arr: any[]) => arr.reduce((acc, curr) => acc + (Number(curr.consumo_medio_mwh) || 0), 0);
@@ -1079,7 +1083,7 @@ function App() {
     };
 
     return { filtered, stats, options: { concessionarias: concessionariasRaw, areas: areasRaw, etapas: etapasSorted, status: statusRaw } };
-  }, [crmData, crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus, selectedConcessionaria, selectedArea, selectedEtapa]);
+  }, [crmData, crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus]); 
 
   const financialGroups = useMemo(() => {
     const normalize = (st: string) => (st || '').toUpperCase();
@@ -1189,7 +1193,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans p-6 pb-20">
-      <header className="flex flex-col md:flex-row items-center justify-between mb-8 border-b border-slate-800 pb-6 gap-6">
+      <header className="flex flex-col md:flex-row items-center justify-between mb-6 border-b border-slate-800 pb-5 gap-6">
         <div className="flex items-center gap-4">
           <img 
              src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" 
@@ -1222,8 +1226,9 @@ function App() {
         </div>
       </header>
 
+      {/* --- FILTROS GLOBAIS NO TOPO UNIFICADOS (Linha única otimizada) --- */}
       {currentTab !== 'carteira' && currentTab !== 'localizacao' && (
-      <section className={`grid gap-4 mb-8 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm animate-in fade-in zoom-in duration-300 grid-cols-1 sm:grid-cols-2 md:grid-cols-5`}>
+      <section className="grid gap-3 mb-6 bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-sm animate-in fade-in zoom-in duration-300 grid-cols-1 md:grid-cols-3 xl:grid-cols-5">
         
         {currentTab !== 'crm' && (
             <>
@@ -1300,14 +1305,15 @@ function App() {
 
       {currentTab === 'geral' && (
           <div className="animate-in fade-in zoom-in duration-300">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                   {[
                       { title: 'Total UCs (Filtro)', value: new Intl.NumberFormat('pt-BR').format(generalMetrics.totalUCs), sub: 'Unidades Consumidoras', icon: Users, color: 'blue' },
                       { title: 'Energia Gerida', value: formatEnergySmart(generalMetrics.totalEnergy, 'MWh'), sub: 'Total Acumulado', icon: Zap, color: 'emerald' },
+                      { title: 'Projeção do Mês', value: formatMoney(macroMetrics.estimado), sub: 'Faturamento Estimado', icon: Target, color: 'indigo' },
                       { title: 'Receita do Período', value: formatMoney(generalMetrics.totalRevenue), sub: 'Faturado + Pendente', icon: DollarSign, color: 'amber' },
                       { title: 'Ticket Médio', value: formatMoney(generalMetrics.avgTicket), sub: 'Por Cliente', icon: PieChart, color: 'purple' }
                   ].map((kpi, idx) => (
-                      <div key={idx} className={`bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-${kpi.color}-500/30 transition-all`}>
+                      <div key={idx} className={`bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-${kpi.color}-500/30 transition-all`}>
                           <div className={`absolute -right-4 -top-4 p-3 bg-${kpi.color}-500/10 rounded-full opacity-50`}><kpi.icon size={64} className={`text-${kpi.color}-500`} /></div>
                           <p className="text-xs font-bold font-display text-slate-500 uppercase tracking-wider mb-1">{kpi.title}</p>
                           <h3 className="text-2xl font-bold font-display text-white">{kpi.value}</h3>
@@ -1317,48 +1323,48 @@ function App() {
               </div>
 
               {globalJourney && (
-                  <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg p-6 flex flex-col relative overflow-hidden mb-8">
+                  <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg p-5 flex flex-col relative overflow-hidden mb-6">
                       <div className="absolute top-0 right-0 p-8 opacity-5"><TrendingUp size={120} /></div>
-                      <h3 className="text-sm font-bold font-display text-slate-400 uppercase tracking-wider mb-6 flex items-center gap-2 relative z-10">
+                      <h3 className="text-sm font-bold font-display text-slate-400 uppercase tracking-wider mb-5 flex items-center gap-2 relative z-10">
                           <TrendingUp size={18} className="text-blue-500"/> SLA / Jornada do Cliente (Média de Tempo)
                       </h3>
                       
                       <div className="flex flex-col md:flex-row items-center justify-between w-full relative z-10 gap-2">
-                          <div className="flex flex-col items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
-                              <div className="bg-blue-500/20 p-3 rounded-full mb-3 border border-blue-500/30"><Target size={24} className="text-blue-400"/></div>
+                          <div className="flex flex-col items-center p-3 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
+                              <div className="bg-blue-500/20 p-3 rounded-full mb-2 border border-blue-500/30"><Target size={20} className="text-blue-400"/></div>
                               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide text-center">Data de Ganho</h4>
                           </div>
 
-                          <div className="flex flex-col items-center justify-center py-2 md:py-0 md:px-4">
-                              <div className="text-lg font-mono font-bold text-yellow-400 mb-1">{globalJourney.ganhoProt} dias</div>
-                              <ArrowRight className="text-slate-600 hidden md:block" size={24}/>
-                              <ArrowDown className="text-slate-600 block md:hidden" size={24}/>
+                          <div className="flex flex-col items-center justify-center py-1 md:py-0 md:px-2">
+                              <div className="text-sm font-mono font-bold text-yellow-400 mb-1">{globalJourney.ganhoProt} dias</div>
+                              <ArrowRight className="text-slate-600 hidden md:block" size={20}/>
+                              <ArrowDown className="text-slate-600 block md:hidden" size={20}/>
                           </div>
 
-                          <div className="flex flex-col items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
-                              <div className="bg-purple-500/20 p-3 rounded-full mb-3 border border-purple-500/30"><FileCheck size={24} className="text-purple-400"/></div>
+                          <div className="flex flex-col items-center p-3 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
+                              <div className="bg-purple-500/20 p-3 rounded-full mb-2 border border-purple-500/30"><FileCheck size={20} className="text-purple-400"/></div>
                               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide text-center">1º Protocolo</h4>
                           </div>
 
-                          <div className="flex flex-col items-center justify-center py-2 md:py-0 md:px-4">
-                              <div className="text-lg font-mono font-bold text-yellow-400 mb-1">{globalJourney.protEcon} dias</div>
-                              <ArrowRight className="text-slate-600 hidden md:block" size={24}/>
-                              <ArrowDown className="text-slate-600 block md:hidden" size={24}/>
+                          <div className="flex flex-col items-center justify-center py-1 md:py-0 md:px-2">
+                              <div className="text-sm font-mono font-bold text-yellow-400 mb-1">{globalJourney.protEcon} dias</div>
+                              <ArrowRight className="text-slate-600 hidden md:block" size={20}/>
+                              <ArrowDown className="text-slate-600 block md:hidden" size={20}/>
                           </div>
 
-                          <div className="flex flex-col items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
-                              <div className="bg-emerald-500/20 p-3 rounded-full mb-3 border border-emerald-500/30"><PiggyBank size={24} className="text-emerald-400"/></div>
+                          <div className="flex flex-col items-center p-3 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
+                              <div className="bg-emerald-500/20 p-3 rounded-full mb-2 border border-emerald-500/30"><PiggyBank size={20} className="text-emerald-400"/></div>
                               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide text-center">1ª Economia</h4>
                           </div>
 
-                          <div className="flex flex-col items-center justify-center py-2 md:py-0 md:px-4">
-                              <div className="text-lg font-mono font-bold text-yellow-400 mb-1">{globalJourney.econFat} dias</div>
-                              <ArrowRight className="text-slate-600 hidden md:block" size={24}/>
-                              <ArrowDown className="text-slate-600 block md:hidden" size={24}/>
+                          <div className="flex flex-col items-center justify-center py-1 md:py-0 md:px-2">
+                              <div className="text-sm font-mono font-bold text-yellow-400 mb-1">{globalJourney.econFat} dias</div>
+                              <ArrowRight className="text-slate-600 hidden md:block" size={20}/>
+                              <ArrowDown className="text-slate-600 block md:hidden" size={20}/>
                           </div>
 
-                          <div className="flex flex-col items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
-                              <div className="bg-rose-500/20 p-3 rounded-full mb-3 border border-rose-500/30"><Receipt size={24} className="text-rose-400"/></div>
+                          <div className="flex flex-col items-center p-3 bg-slate-800/50 rounded-xl border border-slate-700 w-full md:w-auto">
+                              <div className="bg-rose-500/20 p-3 rounded-full mb-2 border border-rose-500/30"><Receipt size={20} className="text-rose-400"/></div>
                               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide text-center">Emissão 1ª Fatura</h4>
                           </div>
                       </div>
@@ -1478,7 +1484,7 @@ function App() {
             <div>
                 <h3 className="text-sm font-bold font-display text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><DollarSign size={16}/> Resumo de Faturamento</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
+                    <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
                     <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Projeção do Mês</h3>
                     <div className="relative z-10">
@@ -1493,7 +1499,7 @@ function App() {
                     </div>
                     </div>
 
-                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden">
+                    <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-blue-500 rounded-full"><FileText size={120} /></div>
                     <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturas Emitidas</h3>
                     <div className="relative z-10">
@@ -1508,7 +1514,7 @@ function App() {
                     </div>
                     </div>
 
-                    <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg relative overflow-hidden border-l-4 border-l-amber-500">
+                    <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden border-l-4 border-l-amber-500">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-amber-500 rounded-full"><Clock size={120} /></div>
                     <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Aguardando Emissão</h3>
                     <div className="relative z-10">
@@ -1526,7 +1532,7 @@ function App() {
             </div>
 
           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col">
-             <div className="p-6 border-b border-slate-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-slate-900/50">
+             <div className="p-5 border-b border-slate-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-slate-900/50">
                <div>
                  <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><CalendarIcon className="text-blue-500" size={24}/> Previsão vs Realizado</h2>
                  <p className="text-sm text-slate-400">Acompanhamento de emissão de faturas</p>
@@ -1541,15 +1547,27 @@ function App() {
                            value={searchText}
                            onChange={e => setSearchText(e.target.value)}
                            placeholder="Buscar UC ou Nome" 
-                           className="bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 transition-all w-60"
+                           className="bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 transition-all w-52"
                         />
+                     </div>
+
+                     <div className="relative">
+                        <select 
+                          value={opFilterEtapa} 
+                          onChange={e => setOpFilterEtapa(e.target.value)} 
+                          className="bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 cursor-pointer w-40"
+                        >
+                            {uniqueEtapasOperational.map(etapa => (
+                                <option key={etapa} value={etapa}>{etapa === 'Todas' ? 'Etapa: Todas' : etapa}</option>
+                            ))}
+                        </select>
                      </div>
 
                      <div className="relative">
                         <select 
                           value={opFilterStatus} 
                           onChange={e => setOpFilterStatus(e.target.value)} 
-                          className="bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 cursor-pointer w-40"
+                          className="bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm outline-none text-white focus:ring-2 focus:ring-blue-500/50 cursor-pointer w-40"
                         >
                             <option value="Todos">Status: Todos</option>
                             <option value="Emitido">Emitido</option>
@@ -1602,12 +1620,16 @@ function App() {
                                 <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('valor_realizado')}>
                                     <div className="flex items-center justify-end gap-1">Valor Faturado (R$) <ArrowUpDown size={14}/></div>
                                 </th>
-                                <th className="px-6 py-4 text-center">Status</th>
+                                
+                                <th className="px-6 py-4 text-center">Status Fatura</th>
+
+                                {emissaoColunas.includes('Status Pagamento') && <th className="px-6 py-4 text-center bg-slate-900 border-l border-slate-800">Pagamento</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                             {paginatedEmissaoData.map((row: any) => {
                             const status = getStatusColor(row.data_prevista_norm, row.data_emissao_norm, row.valor_realizado);
+                            const payBadge = getPaymentBadge(row.status_norm);
                             
                             const eficPercent = row.eficiencia_compensacao * 100;
                             let eficColor = 'text-rose-400';
@@ -1673,14 +1695,25 @@ function App() {
                                 <td className="px-6 py-4 text-right font-bold text-emerald-400">
                                     {row.valor_realizado > 0 ? formatMoney(row.valor_realizado) : <span className="text-slate-600">-</span>}
                                 </td>
+                                
                                 <td className="px-6 py-4 text-center">
                                     <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${status.bg} ${status.color}`}>{status.text}</span>
                                 </td>
+
+                                {emissaoColunas.includes('Status Pagamento') && (
+                                    <td className="px-6 py-4 text-center border-l border-slate-800/50 bg-slate-900/30">
+                                        {payBadge.text !== '-' ? (
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold border ${payBadge.color} ${payBadge.bg}`}>
+                                                {payBadge.text}
+                                            </span>
+                                        ) : <span className="text-slate-500">-</span>}
+                                    </td>
+                                )}
                                 </tr>
                             );
                             })}
                             {paginatedEmissaoData.length === 0 && (
-                            <tr><td colSpan={8 + emissaoColunas.length} className="text-center py-12 text-slate-500">Nenhum dado encontrado para os filtros selecionados.</td></tr>
+                            <tr><td colSpan={9 + emissaoColunas.length} className="text-center py-12 text-slate-500">Nenhum dado encontrado para os filtros selecionados.</td></tr>
                             )}
                         </tbody>
                         <tfoot className="bg-slate-900 border-t-2 border-slate-700 font-bold text-slate-200">
@@ -1696,7 +1729,9 @@ function App() {
 
                                 <td className="px-6 py-4 text-right text-blue-400 text-base">{formatMoney(totalEmissaoEstimado)}</td>
                                 <td className="px-6 py-4 text-right text-emerald-400 text-base border-r border-slate-800">{formatMoney(totalEmissaoRealizado)}</td>
+                                
                                 <td></td>
+                                {emissaoColunas.includes('Status Pagamento') && <td></td>}
                             </tr>
                         </tfoot>
                         </table>
@@ -1717,25 +1752,25 @@ function App() {
                 </div>
                 
                 <div className="overflow-x-auto p-6">
-                    <table className="w-full text-xs text-left border-collapse border border-slate-700">
+                    <table className="w-full text-sm text-left border-collapse border border-slate-700">
                         <thead>
                             <tr className="bg-blue-900 text-white">
                                 <th rowSpan={2} className="p-3 border border-slate-700 text-center font-display uppercase font-bold w-32">Canal</th>
                                 <th rowSpan={2} className="p-3 border border-slate-700 text-center font-display uppercase font-bold w-48">Etapa</th>
                                 {portfolioData.allConcessionarias.map((conc: string) => (
-                                    <th key={conc} colSpan={2} className="p-2 border border-slate-700 text-center font-bold">{conc}</th>
+                                    <th key={conc} colSpan={2} className="p-3 border border-slate-700 text-center font-bold text-sm tracking-wide">{conc}</th>
                                 ))}
-                                <th colSpan={2} className="p-2 border border-slate-700 text-center font-display font-bold bg-slate-800">TOTAL</th>
+                                <th colSpan={2} className="p-3 border border-slate-700 text-center font-display font-bold bg-slate-800 tracking-wide text-sm">TOTAL</th>
                             </tr>
                             <tr className="bg-blue-950 text-slate-300">
                                 {portfolioData.allConcessionarias.map((conc: string) => (
-                                    <th key={`${conc}-ucs`} className="p-2 border border-slate-700 text-center w-16">UCs</th>
+                                    <React.Fragment key={conc}>
+                                        <th className="p-2 border border-slate-700 text-center w-20 text-xs">UCs</th>
+                                        <th className="p-2 border border-slate-700 text-center w-20 text-yellow-300/80 text-xs">MWh</th>
+                                    </React.Fragment>
                                 ))}
-                                {portfolioData.allConcessionarias.map((conc: string) => (
-                                    <th key={`${conc}-mwh`} className="p-2 border border-slate-700 text-center w-16 text-yellow-300/80">MWh</th>
-                                ))}
-                                <th className="p-2 border border-slate-700 text-center w-16 bg-slate-800">UCs</th>
-                                <th className="p-2 border border-slate-700 text-center w-16 bg-slate-800 text-yellow-300/80">MWh</th>
+                                <th className="p-2 border border-slate-700 text-center w-20 bg-slate-800 text-xs">UCs</th>
+                                <th className="p-2 border border-slate-700 text-center w-20 bg-slate-800 text-yellow-300/80 text-xs">MWh</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1743,7 +1778,7 @@ function App() {
                                 const etapas = Object.keys(portfolioData.matrix[area]).sort();
                                 
                                 return (
-                                    <>
+                                    <React.Fragment key={area}>
                                         {etapas.map((etapa, etapaIdx) => {
                                             const rowData = portfolioData.matrix[area][etapa].rows;
                                             const totalRow = portfolioData.matrix[area][etapa].totalRow;
@@ -1752,30 +1787,30 @@ function App() {
                                             return (
                                                 <tr key={`${area}-${etapa}`} className={`hover:bg-slate-700/30 transition-colors border-b border-slate-800 ${bgClass}`}>
                                                     {etapaIdx === 0 && (
-                                                        <td rowSpan={etapas.length + 1} className="p-3 border border-slate-700 font-extrabold font-display text-center align-middle text-white uppercase tracking-wider text-[10px]">
+                                                        <td rowSpan={etapas.length + 1} className="p-3 border border-slate-700 font-extrabold font-display text-center align-middle text-white uppercase tracking-wider text-xs">
                                                             {area}
                                                         </td>
                                                     )}
-                                                    <td className="p-3 border border-slate-700 text-slate-400 font-medium">{etapa}</td>
+                                                    <td className="p-3 border border-slate-700 text-slate-400 font-medium text-xs">{etapa}</td>
                                                     
                                                     {portfolioData.allConcessionarias.map((conc: string) => {
                                                         const cellData = rowData[conc] || { ucs: 0, mwh: 0 };
                                                         return (
-                                                            <>
-                                                                <td key={`${conc}-val-ucs`} className="p-2 border border-slate-700 text-center text-slate-300">
+                                                            <React.Fragment key={conc}>
+                                                                <td className="p-2 border border-slate-700 text-center text-slate-300 text-sm font-medium">
                                                                     {cellData.ucs > 0 ? new Intl.NumberFormat('pt-BR').format(cellData.ucs) : '-'}
                                                                 </td>
-                                                                <td key={`${conc}-val-mwh`} className="p-2 border border-slate-700 text-center text-slate-400 text-[10px]">
+                                                                <td className="p-2 border border-slate-700 text-center text-slate-400 text-sm font-medium">
                                                                     {cellData.mwh > 0 ? new Intl.NumberFormat('pt-BR').format(Math.round(cellData.mwh)) : '-'}
                                                                 </td>
-                                                            </>
+                                                            </React.Fragment>
                                                         );
                                                     })}
                                                     
-                                                    <td className="p-2 border border-slate-700 text-center font-bold text-white bg-slate-800">
+                                                    <td className="p-2 border border-slate-700 text-center font-bold text-white bg-slate-800 text-sm">
                                                         {new Intl.NumberFormat('pt-BR').format(totalRow.ucs)}
                                                     </td>
-                                                    <td className="p-2 border border-slate-700 text-center font-bold text-yellow-400 bg-slate-800">
+                                                    <td className="p-2 border border-slate-700 text-center font-bold text-yellow-400 bg-slate-800 text-sm">
                                                         {new Intl.NumberFormat('pt-BR').format(Math.round(totalRow.mwh))}
                                                     </td>
                                                 </tr>
@@ -1787,14 +1822,14 @@ function App() {
                                             {portfolioData.allConcessionarias.map((conc: string) => {
                                                 const subData = portfolioData.areaTotals[area]?.rows[conc] || { ucs: 0, mwh: 0 };
                                                 return (
-                                                    <>
-                                                        <td key={`${conc}-sub-ucs`} className="p-2 border border-slate-700 text-center text-white">
+                                                    <React.Fragment key={conc}>
+                                                        <td className="p-2 border border-slate-700 text-center text-white text-base">
                                                             {subData.ucs > 0 ? new Intl.NumberFormat('pt-BR').format(subData.ucs) : '-'}
                                                         </td>
-                                                        <td key={`${conc}-sub-mwh`} className="p-2 border border-slate-700 text-center text-yellow-300/80 text-[11px]">
+                                                        <td className="p-2 border border-slate-700 text-center text-yellow-300/80 text-base">
                                                             {subData.mwh > 0 ? new Intl.NumberFormat('pt-BR').format(Math.round(subData.mwh)) : '-'}
                                                         </td>
-                                                    </>
+                                                    </React.Fragment>
                                                 );
                                             })}
                                             <td className="p-2 border border-slate-700 text-center text-white text-lg bg-blue-900/40">
@@ -1804,26 +1839,26 @@ function App() {
                                                 {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.areaTotals[area]?.totalRow.mwh || 0))}
                                             </td>
                                         </tr>
-                                    </>
+                                    </React.Fragment>
                                 );
                             })}
                             
                             <tr className="bg-slate-800 font-black border-t-4 border-slate-500 shadow-xl">
                                 <td colSpan={2} className="p-4 border border-slate-700 font-display text-right uppercase tracking-widest text-lg text-white">TOTAL GERAL DA CARTEIRA</td>
                                 {portfolioData.allConcessionarias.map((conc: string) => (
-                                    <>
-                                        <td key={`${conc}-tot-ucs`} className="p-2 border border-slate-700 text-center text-white text-sm">
+                                    <React.Fragment key={conc}>
+                                        <td className="p-3 border border-slate-700 text-center text-white text-lg">
                                             {new Intl.NumberFormat('pt-BR').format(portfolioData.concessionariaTotals[conc].ucs)}
                                         </td>
-                                        <td key={`${conc}-tot-mwh`} className="p-2 border border-slate-700 text-center text-yellow-400 text-sm">
+                                        <td className="p-3 border border-slate-700 text-center text-yellow-400 text-lg">
                                             {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.concessionariaTotals[conc].mwh))}
                                         </td>
-                                    </>
+                                    </React.Fragment>
                                 ))}
-                                <td className="p-2 border border-slate-700 text-center text-white text-xl bg-slate-700">
+                                <td className="p-3 border border-slate-700 text-center text-white text-2xl bg-slate-700">
                                     {new Intl.NumberFormat('pt-BR').format(portfolioData.globalTotal.ucs)}
                                 </td>
-                                <td className="p-2 border border-slate-700 text-center text-yellow-400 text-xl bg-slate-700">
+                                <td className="p-3 border border-slate-700 text-center text-yellow-400 text-2xl bg-slate-700">
                                     {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.globalTotal.mwh))}
                                 </td>
                             </tr>
@@ -1837,36 +1872,47 @@ function App() {
       {currentTab === 'crm' && (
         <div className="animate-in fade-in zoom-in duration-300 flex flex-col gap-6">
             {crmProcessed.stats && (
-            <div className="grid grid-cols-1 gap-6">
-                <div className="bg-gradient-to-r from-blue-900/40 to-slate-900 border border-blue-800/50 rounded-2xl p-6 flex items-center gap-8 shadow-lg">
-                    <div className="bg-blue-600 p-4 rounded-full shadow-lg shadow-blue-500/20"><Users size={32} className="text-white"/></div>
-                    <div>
-                        <p className="text-sm font-bold font-display text-blue-300 uppercase tracking-wider">Total CRM</p>
-                        <h2 className="text-4xl font-display font-extrabold text-white mt-1">{new Intl.NumberFormat('pt-BR').format(crmProcessed.stats.totalUCs)} <span className="text-lg font-medium text-slate-400">UCs</span></h2>
+            <div className="flex flex-col gap-5 mb-2">
+                {/* Linha 1: Totais + Área de Gestão lado a lado */}
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+                    
+                    {/* Bloco 1: Totais (Span 4) */}
+                    <div className="xl:col-span-4 bg-gradient-to-r from-blue-900/40 to-slate-900 border border-blue-800/50 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-center gap-6 shadow-lg">
+                        <div className="flex flex-col items-center sm:items-start">
+                            <p className="text-sm font-bold font-display text-blue-300 uppercase tracking-wider mb-1">Total CRM</p>
+                            <h2 className="text-4xl font-display font-extrabold text-white flex items-center gap-2">
+                                <Users size={24} className="text-blue-500 opacity-50"/>
+                                {new Intl.NumberFormat('pt-BR').format(crmProcessed.stats.totalUCs)} 
+                                <span className="text-lg font-medium text-slate-400">UCs</span>
+                            </h2>
+                        </div>
+                        <div className="hidden sm:block h-12 w-px bg-blue-800/50"></div>
+                        <div className="flex flex-col items-center sm:items-start">
+                            <p className="text-sm font-bold font-display text-blue-300 uppercase tracking-wider mb-1">Energia Total</p>
+                            <h2 className="text-4xl font-display font-extrabold text-white flex items-center gap-2">
+                                <Zap size={24} className="text-emerald-500 opacity-50"/>
+                                {new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(crmProcessed.stats.totalMwh)} 
+                                <span className="text-lg font-medium text-slate-400">MWh</span>
+                            </h2>
+                        </div>
                     </div>
-                    <div className="h-12 w-px bg-blue-800/50 mx-4"></div>
-                    <div>
-                        <p className="text-sm font-bold font-display text-blue-300 uppercase tracking-wider">Energia Total</p>
-                        <h2 className="text-4xl font-display font-extrabold text-white mt-1 flex items-center gap-2">
-                             {new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(crmProcessed.stats.totalMwh)} 
-                             <span className="text-lg font-medium text-slate-400">MWh</span>
-                        </h2>
+
+                    {/* Bloco 2: Área de Gestão (Span 8) */}
+                    <div className="xl:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-center">
+                        <h3 className="text-xs font-bold font-display text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Briefcase size={14}/> Por Área de Gestão</h3>
+                        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/50">
+                            {Object.entries(crmProcessed.stats.byArea).map(([key, val]: any) => (
+                                <CrmKpiCard key={key} title={key} count={new Intl.NumberFormat('pt-BR').format(val.count)} mwh={val.mwh} color="blue" />
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                <div>
-                    <h3 className="text-xs font-bold font-display text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Briefcase size={14}/> Por Área de Gestão</h3>
-                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/50">
-                        {Object.entries(crmProcessed.stats.byArea).map(([key, val]: any) => (
-                            <CrmKpiCard key={key} title={key} count={new Intl.NumberFormat('pt-BR').format(val.count)} mwh={val.mwh} color="blue" />
-                        ))}
-                    </div>
-                </div>
-
-                 <div>
+                {/* Linha 2: Etapa do Funil ocupando 100% da largura */}
+                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col">
                     <h3 className="text-xs font-bold font-display text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><TrendingUp size={14}/> Por Etapa do Funil</h3>
-                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/50">
-                        {crmProcessed.options.etapas.filter(k => k !== 'Todas').map((key: string) => {
+                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/50">
+                        {crmProcessed.options.etapas.filter((k: string) => k !== 'Todas').map((key: string) => {
                             const val = crmProcessed.stats.byEtapa[key];
                             if (!val) return null; 
                             return <CrmKpiCard key={key} title={key} count={new Intl.NumberFormat('pt-BR').format(val.count)} mwh={val.mwh} color="amber" />;
@@ -1877,7 +1923,7 @@ function App() {
             )}
 
             <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
                     <div>
                         <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><Users className="text-blue-500" size={24}/> Base de Clientes (CRM)</h2>
                     </div>
