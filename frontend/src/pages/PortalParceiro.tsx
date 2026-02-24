@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import  { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { 
-    LogOut, Table as TableIcon, Users, Search, Filter, Settings2, Check, 
+    LogOut, Table as TableIcon, Search, Settings2, Check, 
     ChevronDown, ChevronLeft, ChevronRight, KeyRound, CheckCircle2, ShieldAlert, Loader2,
-    Zap, DollarSign, PiggyBank, Receipt, Download
+    Zap, PiggyBank, Receipt, Download
 } from 'lucide-react';
 
 const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon, fullWidth = false, searchable = false }: any) => {

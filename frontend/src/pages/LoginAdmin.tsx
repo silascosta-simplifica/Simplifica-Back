@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Loader2, LogIn } from 'lucide-react';
 
-export default function LoginAdmin() {
+const LoginAdmin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,3 +62,5 @@ export default function LoginAdmin() {
     </div>
   );
 }
+
+export default LoginAdmin;

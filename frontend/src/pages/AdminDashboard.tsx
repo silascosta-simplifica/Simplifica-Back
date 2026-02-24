@@ -5,7 +5,7 @@ import {
   Area, ComposedChart, Bar, Cell, LabelList, BarChart
 } from 'recharts';
 import { 
-  Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ArrowDown, ShieldAlert, ClipboardList, ExternalLink, Settings2
+  Loader2, Filter, AlertCircle, CheckCircle2, DollarSign, FileText, Send, Clock, Zap, Download, Wallet, Calendar as CalendarIcon, Search, MousePointerClick, TrendingUp, ArrowUpDown, Briefcase, Users, ChevronDown, Check, MapPin, RefreshCw, ChevronLeft, ChevronRight, X, Activity, PieChart, Target, FileCheck, PiggyBank, Receipt, ArrowRight, ShieldAlert, ClipboardList, ExternalLink, Settings2
 } from 'lucide-react';
 import { 
   subMonths, isAfter, isBefore, startOfMonth, endOfMonth, format, 
