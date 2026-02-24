@@ -79,7 +79,6 @@ export const useAnalytics = () => {
       while (crmHasMore) {
         const from = crmPage * pageSize;
         const to = from + pageSize - 1;
-        // Seleciona explicitamente latitude e longitude da VIEW
         const { data: resultCrm, error: errorCrm } = await supabase
           .from('view_crm_dashboard')
           .select('*')
@@ -96,8 +95,6 @@ export const useAnalytics = () => {
         }
       }
       console.timeEnd("Fetching CRM");
-      
-      console.log(`✅ Analytics: ${allRows.length} | ✅ CRM: ${crmRows.length}`);
 
       // --- FORMATAÇÃO GERAL ---
       const formattedData: AnalyticsData[] = allRows.map(row => {
@@ -109,7 +106,7 @@ export const useAnalytics = () => {
         }
 
         return {
-          ...row, // ADICIONADO: Garante que os novos campos cheguem até o App.tsx!
+          ...row, 
           uc: row.uc,
           nome: row.nome_cliente || 'Sem Nome',
           cliente: row.nome_cliente,
@@ -126,13 +123,14 @@ export const useAnalytics = () => {
           vencimento: row.vencimento,
           data_emissao: row.data_emissao,        
           data_emissao_prevista: row.data_emissao_prevista, 
+          data_emissao_distribuidora: row.data_emissao_distribuidora, // <--- A NOVA COLUNA AQUI
           dia_leitura: n(row.dia_leitura),
           concessionaria: row.concessionaria || 'Não Identificada (RD)',
           area_de_gestao: row.area_de_gestao || 'Outros',
           data_ganho: row.data_ganho,
           data_protocolo: row.data_protocolo,
           data_cancelamento: row.data_cancelamento,
-          quem_indicou: null,
+          quem_indicou: row.quem_indicou,
           link_fatura: row.link_fatura,
           codigo_barras: row.codigo_barras,
           codigo_pix: row.codigo_pix,
@@ -148,21 +146,24 @@ export const useAnalytics = () => {
           "data_do_1º_protocolo": row.data_protocolo,
           "data_de_pedido_de_cancelamento": row.data_cancelamento,
           
-          // FORÇANDO A LEITURA DOS NOVOS CAMPOS COM SEGURANÇA
           tarifa_estimada: n(row.tarifa_estimada),
           tarifa_real: n(row.tarifa_real),
-          eficiencia_compensacao: n(row.eficiencia_compensacao)
+          eficiencia_compensacao: n(row.eficiencia_compensacao),
+
+          perc_desconto: n(row.perc_desconto),
+          natureza_cliente: row.natureza_cliente || 'Outros',
+          grupo_tarifario: row.grupo_tarifario || 'N/D',
+          motivo_cancelamento: row.motivo_cancelamento || 'Não Informado'
         };
       });
 
       // --- FORMATAÇÃO CRM ---
-      // Aqui garantimos que latitude e longitude passem para o front
       const crmFormatted = crmRows.map(row => ({
           ...row,
-          latitude: row.latitude,   // Vem da View
-          longitude: row.longitude, // Vem da View
-          cidade: row.cidade,       // Vem da View
-          uf: row.uf,               // Vem da View
+          latitude: row.latitude,    
+          longitude: row.longitude, 
+          cidade: row.cidade,       
+          uf: row.uf,               
           cep_norm: row.cep_uc ? String(row.cep_uc).replace(/\D/g, '') : null
       }));
 
