@@ -7,7 +7,7 @@ import {
     ChevronDown, ChevronLeft, ChevronRight, KeyRound, CheckCircle2, ShieldAlert, Loader2,
     Zap, PiggyBank, Receipt, Download, PlayCircle, Wallet, Users, FileText, Printer, Activity, FileDown, ExternalLink, TrendingUp
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 
 const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon, fullWidth = false, searchable = false }: any) => {
     const [isOpen, setIsOpen] = useState(false);
