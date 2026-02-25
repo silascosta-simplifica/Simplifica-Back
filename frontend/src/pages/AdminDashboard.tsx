@@ -28,30 +28,80 @@ L.Icon.Default.mergeOptions({
     shadowUrl: markerShadow,
 });
 
+// --- COMPONENTES AUXILIARES ---
+
 const ClientMap = ({ clients }: { clients: any[] }) => {
     const locations = useMemo(() => {
         const points: any[] = [];
+        let validos = 0;
+        
         clients.forEach(c => {
             if (c.latitude && c.longitude) {
+                validos++;
                 const lat = Number(c.latitude) + (Math.random() - 0.5) * 0.0002;
                 const lng = Number(c.longitude) + (Math.random() - 0.5) * 0.0002;
                 const idNegocioEncontrado = c.id_negocio || c.ID_NEGOCIO || c.deal_id || c.id_rd || null;
-                points.push({ id: c.uc || Math.random(), lat: lat, lng: lng, name: c.nome_negocio || 'Sem Nome', city: c.cidade || 'Desconhecido', uf: c.uf || '', mwh: Number(c.consumo_medio_mwh) || 0, dealId: idNegocioEncontrado });
+
+                points.push({
+                    id: c.uc || Math.random(),
+                    lat: lat,
+                    lng: lng,
+                    name: c.nome_negocio || 'Sem Nome',
+                    city: c.cidade || 'Desconhecido',
+                    uf: c.uf || '',
+                    mwh: Number(c.consumo_medio_mwh) || 0,
+                    dealId: idNegocioEncontrado
+                });
             }
         });
         return points;
     }, [clients]);
 
-    if (locations.length === 0) return (<div className="h-full w-full flex flex-col items-center justify-center bg-slate-900 text-center p-6 relative z-10"><div className="bg-slate-800 p-6 rounded-full mb-6 border border-slate-700 shadow-xl"><MapPin size={48} className="text-slate-500" /></div><h3 className="text-2xl font-display font-bold text-white mb-2">Sem dados geográficos</h3><p className="text-slate-400 mb-4 max-w-md">Nenhum cliente na lista atual possui coordenadas cadastradas no banco de dados.</p></div>);
+    if (locations.length === 0) {
+        return (
+            <div className="h-full w-full flex flex-col items-center justify-center bg-slate-900 text-center p-6 relative z-10">
+                <div className="bg-slate-800 p-6 rounded-full mb-6 border border-slate-700 shadow-xl">
+                    <MapPin size={48} className="text-slate-500" />
+                </div>
+                <h3 className="text-2xl font-display font-bold text-white mb-2">Sem dados geográficos</h3>
+                <p className="text-slate-400 mb-4 max-w-md">
+                   Nenhum cliente na lista atual possui coordenadas cadastradas no banco de dados.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full w-full bg-slate-900 rounded-xl overflow-hidden relative z-0">
-            <MapContainer center={[-15.79, -47.88]} zoom={4} style={{ height: '100%', width: '100%' }} preferCanvas={true}><TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+            <MapContainer center={[-15.79, -47.88]} zoom={4} style={{ height: '100%', width: '100%' }} preferCanvas={true}>
+                <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
                 {locations.map((loc) => (
-                    <Marker key={loc.id} position={[loc.lat, loc.lng]}><Popup className="custom-popup"><div className="p-1 min-w-[150px]"><h4 className="font-bold font-display text-slate-800 text-sm mb-1 border-b pb-1">{loc.city}-{loc.uf}</h4><div className="text-xs text-slate-600 mt-1">{loc.dealId ? (<a href={`https://crm.rdstation.com/app/deals/${loc.dealId}`} target="_blank" rel="noopener noreferrer" className="truncate font-bold text-blue-600 hover:text-blue-800 hover:underline block mb-1" title="Abrir Negócio no RD Station">{loc.name}</a>) : (<p className="truncate font-medium text-slate-800 mb-1">{loc.name}</p>)}<p className="mt-1">Consumo: <span className="font-bold text-emerald-600">{new Intl.NumberFormat('pt-BR').format(Math.round(loc.mwh * 1000))} kWh</span></p></div></div></Popup></Marker>
+                    <Marker key={loc.id} position={[loc.lat, loc.lng]}>
+                        <Popup className="custom-popup">
+                            <div className="p-1 min-w-[150px]">
+                                <h4 className="font-bold font-display text-slate-800 text-sm mb-1 border-b pb-1">{loc.city}-{loc.uf}</h4>
+                                <div className="text-xs text-slate-600 mt-1">
+                                    {loc.dealId ? (
+                                        <a href={`https://crm.rdstation.com/app/deals/${loc.dealId}`} target="_blank" rel="noopener noreferrer" className="truncate font-bold text-blue-600 hover:text-blue-800 hover:underline block mb-1" title="Abrir Negócio no RD Station">
+                                            {loc.name}
+                                        </a>
+                                    ) : (
+                                        <p className="truncate font-medium text-slate-800 mb-1">{loc.name}</p>
+                                    )}
+                                    <p className="mt-1">
+                                        Consumo: <span className="font-bold text-emerald-600">{new Intl.NumberFormat('pt-BR').format(Math.round(loc.mwh * 1000))} kWh</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </Popup>
+                    </Marker>
                 ))}
             </MapContainer>
-            <div className="absolute top-4 right-4 z-[400]"><div className="bg-slate-900/90 backdrop-blur text-xs text-white px-4 py-2 rounded-lg border border-slate-600 shadow-md font-medium">{locations.length} Locais Encontrados</div></div>
+            <div className="absolute top-4 right-4 z-[400]">
+                <div className="bg-slate-900/90 backdrop-blur text-xs text-white px-4 py-2 rounded-lg border border-slate-600 shadow-md font-medium">
+                    {locations.length} Locais Encontrados
+                </div>
+            </div>
         </div>
     );
 };
@@ -62,16 +112,27 @@ const DateRangePicker = ({ onChange, selectedRange }: any) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const handleClickOutside = (event: any) => { if (containerRef.current && !containerRef.current.contains(event.target)) setIsOpen(false); };
+        const handleClickOutside = (event: any) => {
+            if (containerRef.current && !containerRef.current.contains(event.target)) setIsOpen(false);
+        };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const nextMonth = () => setViewDate(addMonths(viewDate, 1));
+    const prevMonth = () => setViewDate(subMonths(viewDate, 1));
+
     const handleDayClick = (day: Date) => {
-        if (!selectedRange.from || (selectedRange.from && selectedRange.to)) onChange({ from: day, to: undefined });
-        else {
-            if (isBefore(day, selectedRange.from)) { onChange({ from: day, to: selectedRange.from }); setIsOpen(false); }
-            else { onChange({ ...selectedRange, to: day }); setIsOpen(false); }
+        if (!selectedRange.from || (selectedRange.from && selectedRange.to)) {
+            onChange({ from: day, to: undefined });
+        } else {
+            if (isBefore(day, selectedRange.from)) {
+                onChange({ from: day, to: selectedRange.from });
+                setIsOpen(false);
+            } else {
+                onChange({ ...selectedRange, to: day });
+                setIsOpen(false);
+            }
         }
     };
 
@@ -87,7 +148,7 @@ const DateRangePicker = ({ onChange, selectedRange }: any) => {
             </button>
             {isOpen && (
                 <div className="absolute top-full left-0 mt-2 p-4 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 w-[300px]">
-                    <div className="flex justify-between items-center mb-4"><button onClick={() => setViewDate(subMonths(viewDate, 1))} className="p-1 hover:bg-slate-800 rounded text-slate-400"><ChevronLeft size={16}/></button><span className="text-sm font-bold font-display text-white capitalize">{format(viewDate, 'MMMM yyyy', { locale: ptBR })}</span><button onClick={() => setViewDate(addMonths(viewDate, 1))} className="p-1 hover:bg-slate-800 rounded text-slate-400"><ChevronRight size={16}/></button></div>
+                    <div className="flex justify-between items-center mb-4"><button onClick={prevMonth} className="p-1 hover:bg-slate-800 rounded text-slate-400"><ChevronLeft size={16}/></button><span className="text-sm font-bold font-display text-white capitalize">{format(viewDate, 'MMMM yyyy', { locale: ptBR })}</span><button onClick={nextMonth} className="p-1 hover:bg-slate-800 rounded text-slate-400"><ChevronRight size={16}/></button></div>
                     <div className="grid grid-cols-7 gap-1 mb-2 text-center">{['D','S','T','Q','Q','S','S'].map((d, i) => <span key={`dow-${i}`} className="text-xs font-bold text-slate-500">{d}</span>)}</div>
                     <div className="grid grid-cols-7 gap-1">
                         {emptyDays.map((_, i) => <div key={`empty-${i}`} />)}
@@ -258,6 +319,7 @@ function AdminDashboard() {
   });
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
 
+  // Filtros Emissão
   const [searchText, setSearchText] = useState('');
   const [opFilterStatus, setOpFilterStatus] = useState('Todos'); 
   const [opFilterEtapa, setOpFilterEtapa] = useState('Todas'); 
@@ -266,6 +328,7 @@ function AdminDashboard() {
   const [emissaoColunas, setEmissaoColunas] = useState<string[]>([]);
   const emissaoColunasOptions = ['Consumo RD (kWh)', 'Tarifa RD (Estimada)', 'Tarifa Fatura (Real)', 'Consumo (Fatura)', 'Compensação (Fatura)', 'Eficiência (%)', 'Status Pagamento'];
 
+  // Filtros CRM
   const [crmSearch, setCrmSearch] = useState('');
   const [crmFilterConcessionaria, setCrmFilterConcessionaria] = useState<string[]>([]);
   const [crmFilterArea, setCrmFilterArea] = useState<string[]>([]);
@@ -273,6 +336,7 @@ function AdminDashboard() {
   const [crmFilterStatus, setCrmFilterStatus] = useState<string[]>([]);
   const [crmPage, setCrmPage] = useState(1);
 
+  // Filtros Auditoria
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilterEtapa] = useState<string[]>([]);
   const [auditFilterInconsistencia, setAuditFilterInconsistencia] = useState<string[]>([]);
@@ -372,12 +436,15 @@ function AdminDashboard() {
     } catch { return '-'; }
   };
 
+  // --- NOVA REGRA PARA O STATUS DE EMISSÃO ---
   const getStatusColor = (prevista: string | null, real: string | null, valorRealizado: number) => {
     if (real || valorRealizado > 0) return { color: 'text-emerald-400', bg: 'bg-emerald-900/30 border border-emerald-800', text: 'Emitido', value: 'Emitido' };
-    if (!prevista) return { color: 'text-gray-500', bg: 'bg-transparent', text: '-', value: 'Aguardando' };
+    if (!prevista) return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'No Prazo', value: 'No Prazo' };
+    
     const hoje = new Date().toISOString().split('T')[0];
     if (hoje > prevista) return { color: 'text-red-300', bg: 'bg-red-900/40 border border-red-800', text: 'Atrasado', value: 'Atrasado' };
-    return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'Aguardando', value: 'Aguardando' };
+    
+    return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'No Prazo', value: 'No Prazo' };
   };
 
   const getPaymentBadge = (status: string) => {
@@ -466,8 +533,9 @@ function AdminDashboard() {
 
   const generalMetrics = useMemo(() => {
     const totalUCs = filteredData.length;
-    const totalRevenue = macroMetrics.realizado + macroMetrics.pendente;
+    // Energia Gerida: Soma da energia das faturas reais emitidas + energia estimada pendente
     const totalEnergy = macroMetrics.energiaRealizada + macroMetrics.energiaPendente;
+    const totalRevenue = macroMetrics.realizado + macroMetrics.pendente;
     const avgTicket = totalUCs > 0 ? totalRevenue / totalUCs : 0;
     const avgTicketConsumo = totalUCs > 0 ? (totalEnergy * 1000) / totalUCs : 0;
 
@@ -475,10 +543,9 @@ function AdminDashboard() {
   }, [filteredData, macroMetrics]);
 
   const globalJourney = useMemo(() => {
-    let sumGanhoProt = 0, countGanhoProt = 0, ucsGanho = 0, kwhGanho = 0;
-    let sumProtEcon = 0, countProtEcon = 0, ucsProt = 0, kwhProt = 0;
-    let sumEconFat = 0, countEconFat = 0, ucsEcon = 0, kwhEcon = 0;
-    let ucsFat = 0, kwhFat = 0;
+    let sumGanhoProt = 0, countGanhoProt = 0;
+    let sumProtEcon = 0, countProtEcon = 0;
+    let sumEconFat = 0, countEconFat = 0;
 
     crmData.forEach(d => {
         const matchConc = selectedConcessionaria === 'Todas' || (d.concessionaria || 'Outra') === selectedConcessionaria;
@@ -491,12 +558,6 @@ function AdminDashboard() {
         const dtProt = parseBrDate(d.data_protocolo);
         const dtEcon = parseBrDate(d.data_primeira_economia);
         const dtFat = parseBrDate(d.data_primeira_fatura);
-        const kwh = (Number(d.consumo_medio_mwh) || 0) * 1000;
-
-        if (dtGanho) { ucsGanho++; kwhGanho += kwh; }
-        if (dtProt) { ucsProt++; kwhProt += kwh; }
-        if (dtEcon) { ucsEcon++; kwhEcon += kwh; }
-        if (dtFat) { ucsFat++; kwhFat += kwh; }
 
         if (dtGanho && dtProt && (isAfter(dtProt, dtGanho) || isSameDay(dtProt, dtGanho))) { sumGanhoProt += differenceInDays(dtProt, dtGanho); countGanhoProt++; }
         if (dtProt && dtEcon && (isAfter(dtEcon, dtProt) || isSameDay(dtEcon, dtProt))) { sumProtEcon += differenceInDays(dtEcon, dtProt); countProtEcon++; }
@@ -506,8 +567,7 @@ function AdminDashboard() {
     return {
         ganhoProt: countGanhoProt > 0 ? Math.round(sumGanhoProt / countGanhoProt) : 0,
         protEcon: countProtEcon > 0 ? Math.round(sumProtEcon / countProtEcon) : 0,
-        econFat: countEconFat > 0 ? Math.round(sumEconFat / countEconFat) : 0,
-        metrics: { ganho: { ucs: ucsGanho, kwh: kwhGanho }, protocolo: { ucs: ucsProt, kwh: kwhProt }, economia: { ucs: ucsEcon, kwh: kwhEcon }, fatura: { ucs: ucsFat, kwh: kwhFat } }
+        econFat: countEconFat > 0 ? Math.round(sumEconFat / countEconFat) : 0
     };
   }, [crmData, selectedConcessionaria, selectedArea, selectedEtapa]);
 
@@ -629,17 +689,20 @@ function AdminDashboard() {
 
     const monthlyData = monthsKeys.map(mesKey => {
         const items = validData.filter(d => d.mes_norm === mesKey);
-        let consMwh = 0; let compKwh = 0; let val = 0;
+        let consKwh = 0; let compKwh = 0; let val = 0;
 
         items.forEach(item => {
-            consMwh += item.consumo_mwh || 0;
+            // Regra forte: se tem emissão real de fatura, puxar o consumo real e ignorar o da RD no gráfico.
+            if (item.consumo_real_kwh && item.consumo_real_kwh > 0) {
+                consKwh += item.consumo_real_kwh;
+            } else {
+                consKwh += (item.consumo_mwh || 0) * 1000;
+            }
             compKwh += item.compensado_kwh || 0;
             val += item.total_fatura || 0;
         });
 
-        const consKwh = consMwh * 1000;
         totalValue += val; totalCompensated += compKwh;
-
         return { name: mesKey, consumoKwh: Math.round(consKwh), compensadoKwh: Math.round(compKwh), faturado: val };
     });
 
@@ -660,15 +723,39 @@ function AdminDashboard() {
 
     const uniqueUcs = Array.from(new Map(filteredData.map((item: any) => [item.uc, item])).values()) as any[];
 
+    // 1. Processamento das UCs únicas (para PF/PJ e Cancelamentos)
     uniqueUcs.forEach((c: any) => {
+        // PF vs PJ
         const nat = c.natureza_cliente === 'PJ' ? 'PJ' : (c.natureza_cliente === 'PF' ? 'PF' : 'Outros');
         if (pfPj[nat as keyof typeof pfPj]) { 
             pfPj[nat as keyof typeof pfPj].count++; 
             pfPj[nat as keyof typeof pfPj].consumo += (c.consumo_mwh ? c.consumo_mwh * 1000 : c.consumo_kwh || 0); 
         }
 
+        // Churn Mensal Inteligente
         const etapaNorm = c.objetivo_etapa_norm || c.objetivo_etapa;
-        if (etapaNorm === 'Em Exclusão' || etapaNorm === 'Excluído' || etapaNorm === 'Cancelado') {
+        let isChurnedInPeriod = false;
+
+        if (selectedMesRef !== 'Todos') {
+             // Se houver mês filtrado, só conta quem de fato foi cancelado naquele exato mês
+             if (c.data_cancelamento) {
+                 const dt = parseBrDate(c.data_cancelamento);
+                 if (dt) {
+                     const m = String(dt.getMonth() + 1).padStart(2, '0');
+                     const y = dt.getFullYear();
+                     if (`${m}/${y}` === selectedMesRef) {
+                         isChurnedInPeriod = true;
+                     }
+                 }
+             }
+        } else {
+             // Visão Histórica (Todos): Considera o status global atual
+             if (etapaNorm === 'Em Exclusão' || etapaNorm === 'Excluído' || etapaNorm === 'Cancelado') {
+                 isChurnedInPeriod = true;
+             }
+        }
+
+        if (isChurnedInPeriod) {
             const motivo = c.motivo_cancelamento || 'Não informado';
             churn[motivo] = churn[motivo] || { count: 0, consumo: 0 };
             churn[motivo].count++;
@@ -676,7 +763,9 @@ function AdminDashboard() {
         }
     });
 
+    // 2. Processamento de todas as faturas filtradas (Para Tickets, Descontos e SLA de Faturamento)
     filteredData.forEach((c: any) => {
+        // Descontos Médios
         if (c.concessionaria_norm && c.perc_desconto > 0) {
             const conc = c.concessionaria_norm;
             descontos[conc] = descontos[conc] || { sum: 0, count: 0 };
@@ -686,6 +775,7 @@ function AdminDashboard() {
             countDesconto++;
         }
 
+        // Ticket Médio
         if (c.grupo_tarifario && c.grupo_tarifario !== 'N/D' && c.total_fatura > 0) {
             const g = String(c.grupo_tarifario).trim().toUpperCase();
             const macro = g.startsWith('A') ? 'Grupo A' : 'Grupo B';
@@ -695,11 +785,13 @@ function AdminDashboard() {
             ticketGrupo[g].consumo += (c.consumo_kwh || 0); 
         }
 
+        // SLA de Faturamento (Atraso entre Distribuidora e Nosso Boleto)
         if (c.data_emissao_distribuidora && c.data_emissao_norm) {
             const dtDist = parseBrDate(c.data_emissao_distribuidora);
             const dtNossa = parseBrDate(c.data_emissao_norm);
             if (dtDist && dtNossa) {
                 const diff = differenceInDays(dtNossa, dtDist);
+                // Filtro de segurança para ignorar anomalias de banco de dados
                 if (diff >= -5 && diff <= 60) {
                     const conc = c.concessionaria_norm || 'Outra';
                     slaFaturamentoMap[conc] = slaFaturamentoMap[conc] || { sumDays: 0, count: 0 };
@@ -714,28 +806,46 @@ function AdminDashboard() {
 
     const churnUcs = Object.values(churn).reduce((a, b) => a + b.count, 0);
     const churnRate = uniqueUcs.length > 0 ? ((churnUcs / uniqueUcs.length) * 100).toFixed(1) : '0.0';
+    const churnTitle = selectedMesRef === 'Todos' ? 'Cancelamentos Históricos' : 'Cancelamentos no Mês';
     
     const slaGeral = countSla > 0 ? Math.round(totalSlaDays / countSla) : 0;
-    const slaDist = Object.keys(slaFaturamentoMap).map(k => ({ name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'), dias: Math.round(slaFaturamentoMap[k].sumDays / slaFaturamentoMap[k].count) })).sort((a,b) => b.dias - a.dias).slice(0, 6);
+    const slaDist = Object.keys(slaFaturamentoMap).map(k => ({
+        name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'),
+        dias: Math.round(slaFaturamentoMap[k].sumDays / slaFaturamentoMap[k].count)
+    })).sort((a,b) => b.dias - a.dias).slice(0, 6);
 
     return {
-        pfPjData: [ { name: 'Pessoa Jurídica', ucs: pfPj.PJ.count, consumo: pfPj.PJ.consumo, cor: '#10b981' }, { name: 'Pessoa Física', ucs: pfPj.PF.count, consumo: pfPj.PF.consumo, cor: '#3b82f6' } ].filter(d => d.ucs > 0),
+        pfPjData: [
+            { name: 'Pessoa Jurídica', ucs: pfPj.PJ.count, consumo: pfPj.PJ.consumo, cor: '#10b981' }, 
+            { name: 'Pessoa Física', ucs: pfPj.PF.count, consumo: pfPj.PF.consumo, cor: '#3b82f6' }    
+        ].filter(d => d.ucs > 0),
         churnData: Object.keys(churn).map(k => ({ name: k, value: churn[k].count, consumo: churn[k].consumo })).sort((a,b) => b.value - a.value).slice(0, 7),
         churnRate,
-        ticketData: Object.keys(ticketGrupo).map(k => ({ name: k, macro: ticketGrupo[k].macro, ticketMedio: ticketGrupo[k].soma / ticketGrupo[k].count, consumoMedio: ticketGrupo[k].consumo / ticketGrupo[k].count, fill: ticketGrupo[k].macro === 'Grupo A' ? '#6366f1' : '#eab308' })).sort((a,b) => a.name.localeCompare(b.name)),
+        churnTitle,
+        ticketData: Object.keys(ticketGrupo).map(k => ({
+             name: k,
+             macro: ticketGrupo[k].macro,
+             ticketMedio: ticketGrupo[k].soma / ticketGrupo[k].count,
+             consumoMedio: ticketGrupo[k].consumo / ticketGrupo[k].count,
+             fill: ticketGrupo[k].macro === 'Grupo A' ? '#6366f1' : '#eab308' 
+        })).sort((a,b) => a.name.localeCompare(b.name)),
         descontoGeral: countDesconto > 0 ? (totalDesconto / countDesconto).toFixed(1) : '0',
-        descontoDist: Object.keys(descontos).map(k => ({ name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'), desconto: Number((descontos[k].sum / descontos[k].count).toFixed(1)) })).sort((a,b) => b.desconto - a.desconto).slice(0, 6),
-        slaGeral, slaDist
+        descontoDist: Object.keys(descontos).map(k => ({
+             name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'), 
+             desconto: Number((descontos[k].sum / descontos[k].count).toFixed(1))
+        })).sort((a,b) => b.desconto - a.desconto).slice(0, 6),
+        slaGeral,
+        slaDist
     };
-  }, [filteredData]);
+  }, [filteredData, selectedMesRef]);
 
   const funnelMetrics = useMemo(() => {
         const stages: Record<string, { ucs: number, kwh: number, color: string, bg: string, border: string }> = {
             'Pré-protocolo': { ucs: 0, kwh: 0, color: 'text-purple-400', bg: 'bg-slate-900', border: 'border-slate-700' },
             'Protocolado': { ucs: 0, kwh: 0, color: 'text-blue-400', bg: 'bg-slate-900', border: 'border-slate-700' },
             'Operacional': { ucs: 0, kwh: 0, color: 'text-emerald-400', bg: 'bg-slate-900', border: 'border-slate-700' },
-            'Em Exclusão': { ucs: 0, kwh: 0, color: 'text-orange-400', bg: 'bg-slate-900', border: 'border-slate-700' },
-            'Excluído': { ucs: 0, kwh: 0, color: 'text-rose-400', bg: 'bg-slate-900', border: 'border-slate-700' },
+            'Em Exclusão': { ucs: 0, kwh: 0, color: 'text-amber-500', bg: 'bg-slate-900', border: 'border-amber-500/50' },
+            'Excluído': { ucs: 0, kwh: 0, color: 'text-red-600', bg: 'bg-slate-900', border: 'border-red-600/50' },
             'Sem Etapa': { ucs: 0, kwh: 0, color: 'text-slate-400', bg: 'bg-slate-900', border: 'border-slate-700' }
         };
 
@@ -754,8 +864,65 @@ function AdminDashboard() {
             stages[key].kwh += (c.consumo_mwh ? c.consumo_mwh * 1000 : c.consumo_kwh || 0); 
         });
 
-        return Object.keys(stages).map(k => ({ name: k, ...stages[k] }));
+        // Ocultar a caixa "Sem Etapa" caso ela esteja zerada
+        return Object.keys(stages).map(k => ({ name: k, ...stages[k] })).filter(step => step.name !== 'Sem Etapa' || step.ucs > 0);
   }, [filteredData]);
+
+  // BASE IMUTÁVEL PARA A ABA DE EMISSÃO (Ignora filtros de tabela)
+  const emissaoBaseData = useMemo(() => {
+      if (selectedMesRef === 'Todos') return [];
+      return filteredData;
+  }, [filteredData, selectedMesRef]);
+
+  const esteiraFaturamento = useMemo(() => {
+      let expectativa = emissaoBaseData.length;
+      let coletadas = 0;
+      let emitidos = 0;
+      let atrasados = 0;
+      let noPrazo = 0;
+
+      emissaoBaseData.forEach(d => {
+          if (d.fonte_dados === 'LUMI' || d.fonte_dados === 'UNIFICA') coletadas++;
+          const st = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
+          if (st === 'Emitido') emitidos++;
+          else if (st === 'Atrasado') atrasados++;
+          else if (st === 'No Prazo') noPrazo++;
+      });
+
+      return { expectativa, coletadas, emitidos, faltam: expectativa - emitidos, atrasados, noPrazo };
+  }, [emissaoBaseData]);
+
+  // CORREÇÃO DA EMISSAO METRICS: Faltava este bloco na versão anterior
+  const emissaoMetrics = useMemo(() => {
+    const itensRealizados = emissaoBaseData.filter(d => {
+        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
+        return status === 'Emitido';
+    });
+    
+    const realizadoValor = itensRealizados.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0); 
+    const realizadoEnergiaMWh = itensRealizados.reduce((acc, curr) => acc + ((curr.compensacao_real_kwh || 0) / 1000), 0);
+    const tarifaMediaRealizada = (realizadoEnergiaMWh * 1000) > 0 ? realizadoValor / (realizadoEnergiaMWh * 1000) : 0;
+
+    const itensPendentes = emissaoBaseData.filter(d => {
+        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
+        return status !== 'Emitido';
+    });
+    
+    const pendenteValor = itensPendentes.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0); 
+    const pendenteEnergiaMwh = itensPendentes.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0);
+    const tarifaPendente = (pendenteEnergiaMwh * 1000) > 0 ? pendenteValor / (pendenteEnergiaMwh * 1000) : 0;
+
+    const estimadoValor = emissaoBaseData.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0);
+    const estimadoEnergiaMwh = emissaoBaseData.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0);
+    const qtdEstimado = emissaoBaseData.length;
+    const tarifaMediaEstimada = (estimadoEnergiaMwh * 1000) > 0 ? estimadoValor / (estimadoEnergiaMwh * 1000) : 0;
+
+    return { 
+        estimado: estimadoValor, qtdEstimado: qtdEstimado, energiaEstimada: estimadoEnergiaMwh, tarifaEstimada: tarifaMediaEstimada,
+        realizado: realizadoValor, qtdRealizado: itensRealizados.length, energiaRealizada: realizadoEnergiaMWh, tarifaRealizada: tarifaMediaRealizada, 
+        pendente: pendenteValor, qtdPendente: itensPendentes.length, energiaPendente: pendenteEnergiaMwh, tarifaPendente: tarifaPendente
+    };
+  }, [emissaoBaseData]);
 
   const portfolioData = useMemo(() => {
     const allConcessionarias = Array.from(new Set(data.map(d => d.concessionaria_norm).filter(c => c !== 'Outra'))).sort();
@@ -833,46 +1000,6 @@ function AdminDashboard() {
     }
     return filtered;
   }, [filteredData, searchText, opFilterStatus, opFilterEtapa, sortConfig, selectedMesRef]);
-
-  const emissaoMetrics = useMemo(() => {
-    const itensRealizados = operationalData.filter(d => {
-        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
-        return status === 'Emitido';
-    });
-    
-    const realizadoValor = itensRealizados.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0); 
-    const realizadoEnergiaMWh = itensRealizados.reduce((acc, curr) => acc + ((curr.compensacao_real_kwh || 0) / 1000), 0);
-    const tarifaMediaRealizada = (realizadoEnergiaMWh * 1000) > 0 ? realizadoValor / (realizadoEnergiaMWh * 1000) : 0;
-
-    const itensPendentes = operationalData.filter(d => {
-        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
-        return status !== 'Emitido';
-    });
-    
-    const pendenteValor = itensPendentes.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0); 
-    const pendenteEnergiaMwh = itensPendentes.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0);
-    const tarifaPendente = (pendenteEnergiaMwh * 1000) > 0 ? pendenteValor / (pendenteEnergiaMwh * 1000) : 0;
-
-    const estimadoValor = operationalData.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0);
-    const estimadoEnergiaMwh = operationalData.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0);
-    const qtdEstimado = operationalData.length;
-    const tarifaMediaEstimada = (estimadoEnergiaMwh * 1000) > 0 ? estimadoValor / (estimadoEnergiaMwh * 1000) : 0;
-
-    return { 
-        estimado: estimadoValor, 
-        qtdEstimado: qtdEstimado, 
-        energiaEstimada: estimadoEnergiaMwh, 
-        tarifaEstimada: tarifaMediaEstimada,
-        realizado: realizadoValor, 
-        qtdRealizado: itensRealizados.length, 
-        energiaRealizada: realizadoEnergiaMWh, 
-        tarifaRealizada: tarifaMediaRealizada, 
-        pendente: pendenteValor, 
-        qtdPendente: itensPendentes.length, 
-        energiaPendente: pendenteEnergiaMwh, 
-        tarifaPendente: tarifaPendente
-    };
-  }, [operationalData]);
 
   const requestSort = (key: string) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -967,7 +1094,11 @@ function AdminDashboard() {
       recebido: { list: recebidoList, val: sum(recebidoList), energy: sumEnergy(recebidoList) / 1000 },
       atrasado: { list: atrasadoList, val: sum(atrasadoList), energy: sumEnergy(atrasadoList) / 1000 },
       enviado: { list: enviadoList, val: sum(enviadoList), energy: sumEnergy(enviadoList) / 1000 },
-      naoEnviado: { list: naoEnviadoList, val: sum(naoEnviadoList), energy: sumEnergy(naoEnviadoList) / 1000 },
+      naoEnviado: { 
+         list: naoEnviadoList, 
+         val: sum(naoEnviadoList), 
+         energy: naoEnviadoList.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0) 
+      },
     };
   }, [filteredData]);
 
@@ -1037,6 +1168,7 @@ function AdminDashboard() {
   const pfConsumo = biMetrics.pfPjData.find(d => d.name === 'Pessoa Física')?.consumo || 0;
   const pj = biMetrics.pfPjData.find(d => d.name === 'Pessoa Jurídica')?.ucs || 0;
   const pjConsumo = biMetrics.pfPjData.find(d => d.name === 'Pessoa Jurídica')?.consumo || 0;
+  const pctFaturado = generalMetrics.totalUCs > 0 ? Math.round((macroMetrics.qtdRealizado / generalMetrics.totalUCs) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans p-6 pb-20">
@@ -1146,16 +1278,17 @@ function AdminDashboard() {
               {/* TOP KPIS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
                   {[
-                      { title: 'Total UCs (Filtro)', value: new Intl.NumberFormat('pt-BR').format(generalMetrics.totalUCs), sub: 'Unidades Consumidoras', icon: Users, color: 'blue' },
-                      { title: 'Energia Gerida', value: formatEnergySmart(generalMetrics.totalEnergy, 'MWh'), sub: 'Total Acumulado', icon: Zap, color: 'emerald' },
-                      { title: 'Projeção do Mês', value: formatMoney(macroMetrics.estimado), sub: 'Faturamento Estimado', icon: Target, color: 'indigo' },
-                      { title: 'Receita do Período', value: formatMoney(generalMetrics.totalRevenue), sub: 'Faturado + Pendente', icon: DollarSign, color: 'amber' },
-                      { title: 'Ticket Médio', value: formatMoney(generalMetrics.avgTicket), sub: `${new Intl.NumberFormat('pt-BR', {maximumFractionDigits:0}).format(generalMetrics.avgTicketConsumo)} kWh / UC`, icon: PieChart, color: 'purple' },
+                      { title: 'Total UCs (Faturáveis)', value: new Intl.NumberFormat('pt-BR').format(generalMetrics.totalUCs), sub: 'Unidades Consumidoras ativas no mês', icon: Users, color: 'blue', tooltip: 'Total de Unidades Consumidoras ativas na base para o período selecionado.' },
+                      { title: 'Energia Gerida', value: formatEnergySmart(generalMetrics.totalEnergy, 'MWh'), sub: 'Realizada + Projetada', icon: Zap, color: 'emerald', tooltip: 'Soma da energia compensada real com a previsão de consumo das UCs pendentes.' },
+                      { title: 'Projeção do Mês', value: formatMoney(macroMetrics.estimado), sub: 'Estimativa 100% da Base', icon: Target, color: 'indigo', tooltip: 'Faturamento máximo estimado caso todas as UCs ativas no mês sejam cobradas.' },
+                      { title: 'Emissão Realizada', value: formatMoney(macroMetrics.realizado), sub: `${macroMetrics.qtdRealizado} UCs emitidas (${pctFaturado}%)`, icon: DollarSign, color: 'amber', tooltip: 'Valor e quantidade real de boletos já emitidos neste período.' },
+                      { title: 'Ticket Médio', value: formatMoney(generalMetrics.avgTicket), sub: `${new Intl.NumberFormat('pt-BR', {maximumFractionDigits:0}).format(generalMetrics.avgTicketConsumo)} kWh / UC`, icon: PieChart, color: 'purple', tooltip: 'Média de valor em Reais e Consumo (kWh) por Unidade Consumidora no período.' },
                       { 
                           title: 'Perfil de Cliente', 
                           isCustom: true,
                           icon: Briefcase, 
                           color: 'teal',
+                          tooltip: 'Divisão de quantidade e consumo entre Pessoas Físicas e Jurídicas.',
                           content: (
                               <div className="flex justify-between items-center mt-2">
                                   <div className="flex-1 flex flex-col justify-center">
@@ -1171,13 +1304,13 @@ function AdminDashboard() {
                           )
                       }
                   ].map((kpi, idx) => (
-                      <div key={idx} className={`bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-${kpi.color}-500/30 transition-all`}>
+                      <div key={idx} title={kpi.tooltip} className={`bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-${kpi.color}-500/50 transition-all cursor-help`}>
                           <div className={`absolute -right-4 -top-4 p-3 bg-${kpi.color}-500/10 rounded-full opacity-50`}><kpi.icon size={50} className={`text-${kpi.color}-500`} /></div>
                           <p className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1">{kpi.title}</p>
                           {kpi.isCustom ? kpi.content : (
                               <>
-                                  <h3 className="text-xl font-bold font-display text-white truncate" title={kpi.value}>{kpi.value}</h3>
-                                  <p className={`text-[10px] mt-1 text-${kpi.color}-400 font-medium truncate`} title={kpi.sub}>{kpi.sub}</p>
+                                  <h3 className="text-xl font-bold font-display text-white truncate">{kpi.value}</h3>
+                                  <p className={`text-[10px] mt-1 text-${kpi.color}-400 font-medium truncate`}>{kpi.sub}</p>
                               </>
                           )}
                       </div>
@@ -1188,7 +1321,7 @@ function AdminDashboard() {
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
                   {/* FUNIL DA CARTEIRA */}
                   <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-sm p-5 flex flex-col justify-center relative overflow-hidden">
-                      <h3 className="text-xs font-bold font-display text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2 relative z-10">
+                      <h3 className="text-xs font-bold font-display text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2 relative z-10" title="Distribuição das UCs filtradas por etapa do funil">
                           <TrendingUp size={16} className="text-emerald-500"/> Funil da Carteira
                       </h3>
                       <div className="flex w-full justify-between items-center gap-2 relative z-10 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
@@ -1211,7 +1344,7 @@ function AdminDashboard() {
                   <div className="flex flex-col gap-6">
                       {globalJourney && (
                           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-sm p-5 flex flex-col justify-center relative overflow-hidden flex-1">
-                              <h3 className="text-xs font-bold font-display text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2 relative z-10" title="Tempo médio (em dias) que os clientes levam para avançar de etapa">
+                              <h3 className="text-xs font-bold font-display text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2 relative z-10" title="Tempo médio (em dias) que os clientes levam para avançar de etapa no CRM">
                                   <Clock size={16} className="text-blue-500"/> Tempo Médio de Jornada
                               </h3>
                               <div className="flex w-full justify-between items-center relative z-10 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700 pt-2">
@@ -1254,7 +1387,7 @@ function AdminDashboard() {
                 
                 {/* Ticket Médio */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:col-span-1">
-                    <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><DollarSign size={16} className="text-indigo-400"/> Ticket Médio por Grupo Tarifário</h3>
+                    <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2" title="Média de valor faturado separado por tensão (Alta/Baixa)"><DollarSign size={16} className="text-indigo-400"/> Ticket Médio (Tensão)</h3>
                     <div className="flex-1 min-h-[200px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={biMetrics.ticketData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -1278,7 +1411,7 @@ function AdminDashboard() {
 
                 {/* Descontos Médios */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:col-span-1">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex justify-between items-center mb-4" title="Percentual médio de desconto aplicado aos clientes de cada distribuidora">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Receipt size={16} className="text-rose-400"/> Descontos Aplicados</h3>
                         <span className="text-xs bg-slate-950 border border-slate-700 px-2 py-1 rounded-lg font-bold text-rose-400">Média Geral: {biMetrics.descontoGeral}%</span>
                     </div>
@@ -1300,8 +1433,8 @@ function AdminDashboard() {
                 {/* NOVO: SLA DE FATURAMENTO */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col relative overflow-hidden lg:col-span-1">
                     <div className="absolute top-0 right-0 p-5 opacity-5"><Clock size={100} className="text-blue-500"/></div>
-                    <div className="flex justify-between items-center mb-4 relative z-10">
-                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2" title="Tempo entre Fatura da Distribuidora e Nosso Boleto">
+                    <div className="flex justify-between items-center mb-4 relative z-10" title="Delay (em dias) entre a Fatura da Distribuidora e a Emissão do seu Boleto">
+                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
                             <Clock size={16} className="text-blue-400"/> Atraso no Faturamento
                         </h3>
                         <span className="text-xs bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded-lg font-bold text-blue-400">Média: {biMetrics.slaGeral} dias</span>
@@ -1330,10 +1463,10 @@ function AdminDashboard() {
                 {/* Churn Analítico */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:col-span-1">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><ShieldAlert size={16} className="text-orange-500"/> Top Motivos Cancelamento</h3>
-                        <span className="text-xs bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="Proporção de Cancelados em relação à base total">Churn Rate: {biMetrics.churnRate}%</span>
+                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2" title={biMetrics.churnTitle}><ShieldAlert size={16} className="text-orange-500"/> {biMetrics.churnTitle}</h3>
+                        <span className="text-xs bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="% de Cancelados (Neste mês filtrado ou Total Histórico) em relação ao total">Churn Rate: {biMetrics.churnRate}%</span>
                     </div>
-                    <div className="flex-1 flex flex-col justify-start space-y-4 pr-2">
+                    <div className="flex-1 flex flex-col justify-start space-y-4 pr-2 overflow-y-auto max-h-48 scrollbar-thin scrollbar-thumb-slate-700">
                         {biMetrics.churnData.length > 0 ? biMetrics.churnData.map((c, i) => (
                             <div key={i} className="flex justify-between items-center text-xs border-b border-slate-800/50 pb-3 last:border-0 last:pb-0">
                                 <span className="text-slate-400 truncate pr-2 flex-1 font-medium" title={c.name}>{c.name}</span>
@@ -1342,7 +1475,7 @@ function AdminDashboard() {
                                     <span className="text-[10px] text-slate-500 mt-1 font-mono">{formatEnergySmart(c.consumo, 'kWh')}</span>
                                 </div>
                             </div>
-                        )) : <p className="text-xs text-slate-500 text-center py-4">Nenhum cancelamento ("Em Exclusão"/"Excluído") na base atual.</p>}
+                        )) : <p className="text-xs text-slate-500 text-center py-4">Nenhum cancelamento na data ou filtros selecionados.</p>}
                     </div>
                 </div>
               </div>
@@ -1350,7 +1483,7 @@ function AdminDashboard() {
               {/* GRÁFICO DE EVOLUÇÃO (Expandido Horizontalmente) */}
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col mb-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold font-display text-white flex items-center gap-2"><TrendingUp size={20} className="text-blue-500"/> Evolução da Carteira (MWh vs UCs)</h3>
+                  <h3 className="text-lg font-bold font-display text-white flex items-center gap-2" title="Crescimento histórico de volume na base (Total ativo vs Entradas/Saídas)"><TrendingUp size={20} className="text-blue-500"/> Evolução da Carteira (MWh vs UCs)</h3>
                   <div className="flex gap-4 text-xs font-medium">
                     <span className="flex items-center gap-1.5 text-slate-400"><div className="w-3 h-3 bg-emerald-500/20 border border-emerald-500 rounded-full"></div> Carteira Total</span>
                     <span className="flex items-center gap-1.5 text-emerald-400"><div className="w-3 h-3 bg-emerald-400 rounded-sm"></div> Nova Carga</span>
@@ -1378,9 +1511,9 @@ function AdminDashboard() {
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col mb-8">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                   <div>
-                      <h3 className="text-lg font-bold font-display text-white flex items-center gap-2"><Zap size={20} className="text-yellow-500"/> Consumo vs Compensação (kWh)</h3>
+                      <h3 className="text-lg font-bold font-display text-white flex items-center gap-2" title="Relaciona o Consumo Real da Fatura com a Energia Injetada/Compensada"><Zap size={20} className="text-yellow-500"/> Consumo Real vs Compensação (kWh)</h3>
                       <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                          <CheckCircle2 size={12} className="text-emerald-500" /> Apenas faturas capturadas (Status válido)
+                          <CheckCircle2 size={12} className="text-emerald-500" /> Apenas faturas capturadas e validadas.
                       </p>
                   </div>
                   <div className="text-right bg-slate-800 p-3 rounded-xl border border-slate-700">
@@ -1456,14 +1589,16 @@ function AdminDashboard() {
         <div className="animate-in fade-in zoom-in duration-300 space-y-8">
             <div>
                 <h3 className="text-sm font-bold font-display text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><DollarSign size={16}/> Resumo de Faturamento</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* TOP CARDS DE FATURAMENTO (Usam a Base Imutável para não piscarem ao buscar) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
                     <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Projeção do Mês</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-display font-extrabold text-white tracking-tight">{formatMoney(emissaoMetrics.estimado)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
-                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{new Intl.NumberFormat('pt-BR').format(emissaoMetrics.qtdEstimado)} UCs</span>
+                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{new Intl.NumberFormat('pt-BR').format(emissaoMetrics.qtdEstimado)} UCs Ativas</span>
                         <span className="text-emerald-300 bg-emerald-950 border border-emerald-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(emissaoMetrics.energiaEstimada, 'MWh')}</span>
                         <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Estimada">
                             <DollarSign size={12}/> {formatTarifa(emissaoMetrics.tarifaEstimada)}/kWh
@@ -1472,13 +1607,13 @@ function AdminDashboard() {
                     </div>
                     </div>
 
-                    <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden">
+                    <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden border-l-4 border-l-blue-500">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-blue-500 rounded-full"><FileText size={120} /></div>
-                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faturas Emitidas</h3>
+                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Boletos Emitidos</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-display font-extrabold text-blue-500 tracking-tight">{formatMoney(emissaoMetrics.realizado)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
-                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{new Intl.NumberFormat('pt-BR').format(emissaoMetrics.qtdRealizado)} UCs</span>
+                        <span className="text-blue-300 bg-blue-950 border border-blue-900 px-2.5 py-1 rounded-md font-medium">{new Intl.NumberFormat('pt-BR').format(emissaoMetrics.qtdRealizado)} UCs <span className="opacity-50">({emissaoMetrics.qtdEstimado > 0 ? Math.round((emissaoMetrics.qtdRealizado / emissaoMetrics.qtdEstimado) * 100) : 0}%)</span></span>
                         <span className="text-yellow-300 bg-yellow-950 border border-yellow-900 px-2.5 py-1 rounded-md font-medium flex items-center gap-1"><Zap size={12}/> {formatEnergySmart(emissaoMetrics.energiaRealizada, 'MWh')}</span>
                         <span className="text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md font-medium flex items-center gap-1" title="Tarifa Média Realizada">
                             <DollarSign size={12}/> {formatTarifa(emissaoMetrics.tarifaRealizada)}/kWh
@@ -1487,9 +1622,9 @@ function AdminDashboard() {
                     </div>
                     </div>
 
-                    <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden border-l-4 border-l-amber-500">
+                    <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-amber-500 rounded-full"><Clock size={120} /></div>
-                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Aguardando Emissão</h3>
+                    <h3 className="text-slate-400 font-bold font-display mb-2 text-xs uppercase tracking-wider">Faltam Emitir</h3>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-display font-extrabold text-amber-500 tracking-tight">{formatMoney(emissaoMetrics.pendente)}</h2>
                         <div className="flex flex-wrap gap-2 text-xs mt-3">
@@ -1502,6 +1637,48 @@ function AdminDashboard() {
                     </div>
                     </div>
                 </div>
+
+                {/* NOVA ESTEIRA DE EMISSÃO */}
+                {selectedMesRef !== 'Todos' && (
+                <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-sm p-4 mb-6 flex flex-col md:flex-row items-center gap-4 relative overflow-hidden">
+                    <div className="flex items-center gap-2 relative z-10 w-full md:w-auto">
+                        <Activity size={18} className="text-blue-500"/>
+                        <h3 className="text-xs font-bold font-display text-slate-300 uppercase tracking-wider min-w-max">Esteira de Emissão</h3>
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col sm:flex-row justify-between items-center w-full relative z-10 gap-2">
+                        <div className="flex-1 flex flex-col items-center bg-slate-950/50 p-2 rounded-lg border border-slate-800 w-full" title="Total de UCs ativas na base para o período">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">1. Expectativa (UCs)</span>
+                            <span className="text-lg font-mono font-bold text-white">{new Intl.NumberFormat('pt-BR').format(esteiraFaturamento.expectativa)}</span>
+                        </div>
+                        <ArrowRight size={14} className="text-slate-600 hidden sm:block" />
+                        
+                        <div className="flex-1 flex flex-col items-center bg-slate-950/50 p-2 rounded-lg border border-slate-800 w-full" title="Faturas liberadas e identificadas nos portais das Concessionárias (Lumi/Unifica)">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">2. Faturas Coletadas</span>
+                            <span className="text-lg font-mono font-bold text-blue-400">{new Intl.NumberFormat('pt-BR').format(esteiraFaturamento.coletadas)}</span>
+                        </div>
+                        <ArrowRight size={14} className="text-slate-600 hidden sm:block" />
+                        
+                        <div className="flex-1 flex flex-col items-center bg-slate-950/50 p-2 rounded-lg border border-slate-800 w-full" title="Boletos já gerados e enviados para o cliente">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">3. Boletos Emitidos</span>
+                            <span className="text-lg font-mono font-bold text-emerald-400">{new Intl.NumberFormat('pt-BR').format(esteiraFaturamento.emitidos)}</span>
+                        </div>
+                        <ArrowRight size={14} className="text-slate-600 hidden sm:block" />
+                        
+                        <div className="flex-[1.5] flex flex-col items-center bg-slate-950/50 p-2 rounded-lg border border-slate-800 w-full">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">4. Faltam Emitir</span>
+                            <div className="flex items-center gap-3">
+                                <span className="text-lg font-mono font-bold text-amber-400">{new Intl.NumberFormat('pt-BR').format(esteiraFaturamento.faltam)}</span>
+                                <div className="h-6 w-px bg-slate-700"></div>
+                                <div className="flex gap-3 text-[10px] font-medium">
+                                    <span className="flex items-center gap-1 text-red-400" title="Atrasadas na emissão"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div> {esteiraFaturamento.atrasados} Atrasadas</span>
+                                    <span className="flex items-center gap-1 text-blue-300" title="Ainda dentro do prazo previsto"><div className="w-2 h-2 bg-blue-400 rounded-full"></div> {esteiraFaturamento.noPrazo} No Prazo</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                )}
             </div>
 
           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden flex flex-col">
@@ -1545,7 +1722,7 @@ function AdminDashboard() {
                             <option value="Todos">Status: Todos</option>
                             <option value="Emitido">Emitido</option>
                             <option value="Atrasado">Atrasado</option>
-                            <option value="Aguardando">Aguardando</option>
+                            <option value="No Prazo">No Prazo</option>
                         </select>
                      </div>
                    </div>
