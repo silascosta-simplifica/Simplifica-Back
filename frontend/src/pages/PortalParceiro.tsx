@@ -95,7 +95,6 @@ export default function PortalParceiro() {
     const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
     const [filtroParceiro, setFiltroParceiro] = useState<string[]>([]); 
     
-    // Adicionado "Ações (Links)" nas opções de colunas
     const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Data Ganho', 'Data Protocolo', 'Data Cancelamento', 'Mês Referência', 'Etapa', 'Economia (R$)', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Percentual (%)', 'Comissão (R$)', 'Status Pagamento', 'Data Emissão', 'Vencimento', 'Código PIX', 'Código de Barras'];
     const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Mês Referência', 'Etapa', 'Status Pagamento', 'Eficiência (%)', 'Comissão (R$)', 'Código PIX']);
 
@@ -111,11 +110,12 @@ export default function PortalParceiro() {
 
     const [comissoes, setComissoes] = useState<Record<string, number>>({});
     
-    // ESTADOS DO RELATÓRIO DO CLIENTE
     const [relatorioUc, setRelatorioUc] = useState<string>('');
     const [buscaRelatorio, setBuscaRelatorio] = useState('');
     const [showUcDropdown, setShowUcDropdown] = useState(false);
     const dropdownRelatorioRef = useRef<HTMLDivElement>(null);
+
+    const [loadingDownloads, setLoadingDownloads] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         const handleClickOutsideDropdown = (e: any) => { 
@@ -131,7 +131,7 @@ export default function PortalParceiro() {
         const fetchPlanilhaComissoes = async () => {
             try {
                 const sheetId = '1eXq0INVIaa2GFx-xvA4SgS9T4hDrFYflhXwVn-CPDa0';
-                const gid = '573005863'; 
+                const gid = '573005863'; // Altere para o GID da aba "Base API" depois
                 const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`;
                 
                 const response = await fetch(url);
@@ -197,6 +197,89 @@ export default function PortalParceiro() {
     const handleLogout = () => {
         localStorage.removeItem('@Simplifica:parceiroLogado');
         navigate('/login-parceiro');
+    };
+
+    const setBtnLoading = (id: string, isLoading: boolean) => {
+        setLoadingDownloads(prev => ({ ...prev, [id]: isLoading }));
+    };
+
+    const handleDownloadGestao = async (uc: string, mesRef: string, type: 'FATURA'|'BOLETO', buttonId: string) => {
+        if (!uc || !mesRef) return;
+        setBtnLoading(buttonId, true);
+        
+        try {
+            const parts = mesRef.split('/');
+            if (parts.length !== 2) throw new Error("Referência de data inválida.");
+            const refYm = `${parts[1]}-${parts[0]}`;
+
+            // Chama a NOSSA nova Edge Function segura (Proxy)
+            const { data, error } = await supabase.functions.invoke('gestao-docs', {
+                body: { uc: uc, mes_ref: refYm, tipo: type }
+            });
+
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+            if (!data?.url) throw new Error("A plataforma não devolveu a URL.");
+
+            window.open(data.url, '_blank');
+            
+        } catch (err: any) {
+            alert(`Falha ao buscar ${type}: ${err.message}`);
+        } finally {
+            setBtnLoading(buttonId, false);
+        }
+    };
+
+    const handleDownloadLumiBoleto = async (uc: string, mesRef: string, buttonId: string) => {
+        setBtnLoading(buttonId, true);
+        try {
+            const email = import.meta.env.VITE_LUMI_EMAIL;
+            const senha = import.meta.env.VITE_LUMI_SENHA;
+            
+            if (!email || !senha) {
+                throw new Error("Credenciais da API Lumi não configuradas no arquivo .env (Fale com o suporte técnico)");
+            }
+
+            const resLogin = await fetch('https://api.labs-lumi.com.br/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, senha })
+            });
+            const loginData = await resLogin.json();
+            if (loginData.status !== 'sucesso') throw new Error("Falha de autenticação na Lumi.");
+            const token = loginData.token;
+
+            const parts = mesRef.split('/');
+            const driveId = `${uc}-${parts[0]}-${parts[1]}`;
+
+            const resBoleto = await fetch('https://api.labs-lumi.com.br/pagamentos/preview-cobranca/location', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ drive_id: driveId })
+            });
+            const boletoData = await resBoleto.json();
+            
+            if (boletoData.status !== 'successo' || !boletoData.data?.toRender?.data) {
+                throw new Error("A Lumi não gerou o boleto para esta referência.");
+            }
+
+            const byteArray = new Uint8Array(boletoData.data.toRender.data);
+            const blob = new Blob([byteArray], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Boleto_Simplifica_${uc}_${parts[0]}_${parts[1]}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+        } catch (err: any) {
+            alert(`Falha ao gerar Boleto Lumi: ${err.message}`);
+        } finally {
+            setBtnLoading(buttonId, false);
+        }
     };
 
     const handleGerarCodigos = async (asaasId: string, chaveLinha: string) => {
@@ -311,7 +394,7 @@ export default function PortalParceiro() {
             is_consorcio: d.is_consorcio || 'Não',
             fonte_dados: d.fonte_dados, 
             boleto_simplifica: parseNum(d.boleto_simplifica) || parseNum(d.valor_real_cobranca),
-            consumo_kwh: parseNum(d.consumo_kwh), // Consumo real da fatura
+            consumo_kwh: parseNum(d.consumo_kwh),
             consumo_crm_kwh: (parseNum(d.consumo_crm_mwh) || parseNum(d['consumo_médio_na_venda_mwh'])) * 1000,
             compensacao_kwh: parseNum(d.compensacao_kwh) || parseNum(d['compensação_total_kwh']),
             eficiencia_compensacao: parseNum(d.eficiencia_compensacao),
@@ -325,9 +408,7 @@ export default function PortalParceiro() {
             codigo_barras: d.codigo_barras,
             asaas_id: d.asaas_id,
             id_chave_composta: d.id_chave_composta || `${d.uc}-${d['mês_referência']}`,
-            // Mapeamento dos Links para os Botões
-            link_boleto_simplifica: d.link_fatura || d.link_boleto || d.l_link || d.u_link || null,
-            link_fatura_distribuidora: d.link_fatura_concessionaria || d.fatura_concessionaria_pdf || null
+            link_fatura: d.link_fatura // campo do banco que tem o UUID da lumi ou link direto
         }));
 
         dadosTratados = dadosTratados.filter((d: any) => {
@@ -607,17 +688,24 @@ export default function PortalParceiro() {
     return (
         <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col">
             
-            {/* CSS BLINDADO PARA FORÇAR O TEMA ESCURO NO PDF */}
+            {/* CSS BLINDADO PARA IMPRESSÃO EM A4 (FUNDO ESCURO OBRIGATÓRIO) */}
             {activeTab === 'relatorio' && (
                 <style>
                     {`
                         @media print {
-                            @page { size: A4 portrait; margin: 8mm; }
-                            html, body {
+                            @page { size: A4 portrait; margin: 5mm; }
+                            html, body, #root {
                                 background-color: #020617 !important;
                                 color: white !important;
-                                print-color-adjust: exact !important;
                                 -webkit-print-color-adjust: exact !important;
+                                print-color-adjust: exact !important;
+                                height: 100% !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                            }
+                            .page-break-inside-avoid {
+                                page-break-inside: avoid !important;
+                                break-inside: avoid !important;
                             }
                         }
                     `}
@@ -805,6 +893,11 @@ export default function PortalParceiro() {
                                             if (eficPercent >= 90) { eficColor = 'text-emerald-400'; eficBg = 'bg-emerald-900/40 border-emerald-800/50'; }
                                             else if (eficPercent >= 70) { eficColor = 'text-yellow-400'; eficBg = 'bg-yellow-900/40 border-yellow-800/50'; }
 
+                                            // Link direto da Lumi se for o caso
+                                            const faturaLumiUrl = (row.fonte_dados === 'LUMI' && row.link_fatura) 
+                                                ? `https://api.labs-lumi.com.br/faturas/download/${row.link_fatura}` 
+                                                : null;
+
                                             return (
                                                 <tr key={chaveLinha} className="hover:bg-slate-800/40 transition-colors">
                                                     <td className="px-5 py-3">
@@ -816,8 +909,23 @@ export default function PortalParceiro() {
                                                     {colunasAtivas.includes('Ações (Links)') && (
                                                         <td className="px-5 py-3 text-center">
                                                             <div className="flex items-center justify-center gap-2">
-                                                                {row.link_fatura_distribuidora ? (
-                                                                    <a href={row.link_fatura_distribuidora} target="_blank" rel="noopener noreferrer" title="Fatura da Concessionária em PDF" className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-400 rounded-md transition-colors">
+                                                                {/* BOTÃO FATURA CONCESSIONÁRIA */}
+                                                                {row.fonte_dados === 'UNIFICA' ? (
+                                                                    <button 
+                                                                        onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'FATURA', `btn_fat_${chaveLinha}`)}
+                                                                        disabled={loadingDownloads[`btn_fat_${chaveLinha}`]}
+                                                                        title="Fatura da Concessionária (Unifica)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors disabled:opacity-50"
+                                                                    >
+                                                                        {loadingDownloads[`btn_fat_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16} />}
+                                                                    </button>
+                                                                ) : faturaLumiUrl ? (
+                                                                    <a 
+                                                                        href={faturaLumiUrl} 
+                                                                        target="_blank" rel="noopener noreferrer" 
+                                                                        title="Fatura da Concessionária (Lumi)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors flex items-center justify-center"
+                                                                    >
                                                                         <FileDown size={16} />
                                                                     </a>
                                                                 ) : (
@@ -826,13 +934,28 @@ export default function PortalParceiro() {
                                                                     </div>
                                                                 )}
                                                                 
-                                                                {row.link_boleto_simplifica ? (
-                                                                    <a href={row.link_boleto_simplifica} target="_blank" rel="noopener noreferrer" title="Boleto / Link de Pagamento" className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-400 rounded-md transition-colors">
-                                                                        <ExternalLink size={16} />
-                                                                    </a>
+                                                                {/* BOTÃO BOLETO SIMPLIFICA */}
+                                                                {row.fonte_dados === 'UNIFICA' ? (
+                                                                    <button 
+                                                                        onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'BOLETO', `btn_bol_${chaveLinha}`)}
+                                                                        disabled={loadingDownloads[`btn_bol_${chaveLinha}`]}
+                                                                        title="Boleto Simplifica (Unifica)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50"
+                                                                    >
+                                                                        {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
+                                                                    </button>
+                                                                ) : row.fonte_dados === 'LUMI' ? (
+                                                                    <button 
+                                                                        onClick={() => handleDownloadLumiBoleto(row.uc, row.mes_referencia, `btn_bol_${chaveLinha}`)}
+                                                                        disabled={loadingDownloads[`btn_bol_${chaveLinha}`]}
+                                                                        title="Gerar PDF Boleto Simplifica (Lumi)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50"
+                                                                    >
+                                                                        {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
+                                                                    </button>
                                                                 ) : (
                                                                     <div title="Link de cobrança não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed">
-                                                                        <ExternalLink size={16} />
+                                                                        <Receipt size={16} />
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -1006,7 +1129,7 @@ export default function PortalParceiro() {
 
                         {/* O RELATÓRIO EM SI (Forçando fundo escuro mesmo na impressão, constrito no A4) */}
                         {relatorioData ? (
-                            <div className="bg-slate-900 print:bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-2 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full print:text-white page-break-inside-avoid">
+                            <div className="bg-slate-900 print:bg-[#020617] border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-0 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full print:text-white page-break-inside-avoid">
                                 
                                 {/* HEADER RELATÓRIO */}
                                 <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-3 mb-6 print:mb-4">
@@ -1022,7 +1145,7 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* INFO CADASTRAL E STATUS */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-2 mb-8 print:mb-5">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-2 mb-8 print:mb-4">
                                     <div className="bg-slate-950 p-4 print:p-2 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[8px] font-bold text-slate-500 uppercase mb-1">Concessionária</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">{relatorioData.infoCadastral.concessionaria}</p>
@@ -1046,7 +1169,7 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* GRANDES NÚMEROS DE ECONOMIA E COMPENSAÇÃO */}
-                                <div className="flex flex-col sm:flex-row gap-6 print:gap-4 mb-8 print:mb-5 page-break-inside-avoid">
+                                <div className="flex flex-col sm:flex-row gap-6 print:gap-4 mb-8 print:mb-4 page-break-inside-avoid">
                                     <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 print:border-emerald-800/50 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <PiggyBank size={32} className="text-emerald-500 mb-3 print:mb-1 print:h-6 print:w-6"/>
                                         <p className="text-xs print:text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Economia Total Acumulada</p>
@@ -1084,14 +1207,14 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* GRÁFICO (ÚNICO E ALARGADO) */}
-                                <div className="mb-8 print:mb-6 page-break-inside-avoid">
-                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-4 print:mb-2 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (kWh)</h3>
-                                    <div className="h-[250px] print:h-[200px] w-full">
+                                <div className="mb-8 print:mb-4 page-break-inside-avoid">
+                                    <h3 className="text-sm print:text-[10px] font-bold text-slate-300 mb-4 print:mb-2 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (kWh)</h3>
+                                    <div className="w-full" style={{ height: '220px' }}>
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 10, left: -10, bottom: 25 }} barGap={2}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                                <XAxis dataKey="mes" stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} tickMargin={8}/>
-                                                <YAxis stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false}/>
+                                            <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 10, left: -20, bottom: 35 }} barGap={2}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                                <XAxis dataKey="mes" stroke="#64748b" fontSize={9} axisLine={false} tickLine={false} tickMargin={8} angle={-35} textAnchor="end" />
+                                                <YAxis stroke="#64748b" fontSize={9} axisLine={false} tickLine={false}/>
                                                 <Bar dataKey="consumo" fill="#3b82f6" radius={[2, 2, 0, 0]} name="Consumo (kWh)" isAnimationActive={false} />
                                                 <Bar dataKey="compensacao" fill="#eab308" radius={[2, 2, 0, 0]} name="Compensação (kWh)" isAnimationActive={false} />
                                             </BarChart>
@@ -1100,7 +1223,7 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* EXTRATO FINAL DAS ÚLTIMAS FATURAS */}
-                                <div className="page-break-inside-avoid">
+                                <div className="page-break-inside-avoid mt-8">
                                     <h3 className="text-sm print:text-[10px] font-bold text-slate-300 mb-4 print:mb-2 border-b border-slate-800 pb-2 print:pb-1">Extrato das Últimas Faturas</h3>
                                     <table className="w-full text-sm print:text-[9px] text-left">
                                         <thead className="text-xs print:text-[8px] uppercase text-slate-500 border-b border-slate-800">

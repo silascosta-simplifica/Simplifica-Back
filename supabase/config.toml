@@ -397,3 +397,25 @@ entrypoint = "./functions/asaas-cobranca/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/asaas-cobranca/*.html" ]
+
+[functions.proxy-documentos]
+enabled = true
+verify_jwt = true
+import_map = "./functions/proxy-documentos/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/proxy-documentos/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/proxy-documentos/*.html" ]
+
+[functions.gestao-docs]
+enabled = true
+verify_jwt = true
+import_map = "./functions/gestao-docs/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/gestao-docs/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/gestao-docs/*.html" ]
