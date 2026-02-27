@@ -13,6 +13,8 @@
     "@supabase/supabase-js": "^2.95.3",
     "@tanstack/react-query": "^4.43.0",
     "date-fns": "^4.1.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
     "react": "^18.2.0",

@@ -7,6 +7,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import LoginAdmin from './pages/LoginAdmin';
 import LoginParceiro from './pages/LoginParceiro';
 import PortalParceiro from './pages/PortalParceiro';
+import LoginCamila from './pages/LoginCamila';
+import PortalCamila from './pages/PortalCamila';
 
 export default function App() {
   const [adminSession, setAdminSession] = useState<any>(null);
@@ -46,6 +48,10 @@ export default function App() {
         {/* ÁREA DO PARCEIRO */}
         <Route path="/login-parceiro" element={<LoginParceiro />} />
         <Route path="/portal-parceiro" element={<PortalParceiro />} />
+
+        {/* ÁREA DA CAMILA (BACK-OFFICE) */}
+        <Route path="/login-camila" element={<LoginCamila />} />
+        <Route path="/portal-camila" element={<PortalCamila />} />
       </Routes>
     </BrowserRouter>
   );

@@ -5,7 +5,7 @@ import { useAnalytics } from '../hooks/useAnalytics';
 import { 
     LogOut, Table as TableIcon, Search, Settings2, Check, 
     ChevronDown, ChevronLeft, ChevronRight, KeyRound, CheckCircle2, ShieldAlert, Loader2,
-    Zap, PiggyBank, Receipt, Download, PlayCircle, Wallet, Users, FileText, Printer, Activity, FileDown, TrendingUp
+    Zap, PiggyBank, Receipt, Download, PlayCircle, Wallet, Users, FileText, Printer, Activity, FileDown, ExternalLink, TrendingUp
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 
@@ -127,11 +127,12 @@ export default function PortalParceiro() {
         return () => document.removeEventListener('mousedown', handleClickOutsideDropdown);
     }, []);
 
+    // Busca a comissão da aba "Base Silas"
     useEffect(() => {
         const fetchPlanilhaComissoes = async () => {
             try {
                 const sheetId = '1eXq0INVIaa2GFx-xvA4SgS9T4hDrFYflhXwVn-CPDa0';
-                const gid = '573005863'; // Altere para o GID da aba "Base API" depois
+                const gid = '573005863'; 
                 const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`;
                 
                 const response = await fetch(url);
@@ -203,6 +204,7 @@ export default function PortalParceiro() {
         setLoadingDownloads(prev => ({ ...prev, [id]: isLoading }));
     };
 
+    // Download da Gestão usa Edge Function para driblar CORS
     const handleDownloadGestao = async (uc: string, mesRef: string, type: 'FATURA'|'BOLETO', buttonId: string) => {
         if (!uc || !mesRef) return;
         setBtnLoading(buttonId, true);
@@ -212,7 +214,6 @@ export default function PortalParceiro() {
             if (parts.length !== 2) throw new Error("Referência de data inválida.");
             const refYm = `${parts[1]}-${parts[0]}`;
 
-            // Chama a NOSSA nova Edge Function segura (Proxy)
             const { data, error } = await supabase.functions.invoke('gestao-docs', {
                 body: { uc: uc, mes_ref: refYm, tipo: type }
             });
@@ -224,59 +225,7 @@ export default function PortalParceiro() {
             window.open(data.url, '_blank');
             
         } catch (err: any) {
-            alert(`Falha ao buscar ${type}: ${err.message}`);
-        } finally {
-            setBtnLoading(buttonId, false);
-        }
-    };
-
-    const handleDownloadLumiBoleto = async (uc: string, mesRef: string, buttonId: string) => {
-        setBtnLoading(buttonId, true);
-        try {
-            const email = import.meta.env.VITE_LUMI_EMAIL;
-            const senha = import.meta.env.VITE_LUMI_SENHA;
-            
-            if (!email || !senha) {
-                throw new Error("Credenciais da API Lumi não configuradas no arquivo .env (Fale com o suporte técnico)");
-            }
-
-            const resLogin = await fetch('https://api.labs-lumi.com.br/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, senha })
-            });
-            const loginData = await resLogin.json();
-            if (loginData.status !== 'sucesso') throw new Error("Falha de autenticação na Lumi.");
-            const token = loginData.token;
-
-            const parts = mesRef.split('/');
-            const driveId = `${uc}-${parts[0]}-${parts[1]}`;
-
-            const resBoleto = await fetch('https://api.labs-lumi.com.br/pagamentos/preview-cobranca/location', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ drive_id: driveId })
-            });
-            const boletoData = await resBoleto.json();
-            
-            if (boletoData.status !== 'successo' || !boletoData.data?.toRender?.data) {
-                throw new Error("A Lumi não gerou o boleto para esta referência.");
-            }
-
-            const byteArray = new Uint8Array(boletoData.data.toRender.data);
-            const blob = new Blob([byteArray], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Boleto_Simplifica_${uc}_${parts[0]}_${parts[1]}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-        } catch (err: any) {
-            alert(`Falha ao gerar Boleto Lumi: ${err.message}`);
+            alert(`Falha ao buscar ${type}. Verifique se a Edge Function 'gestao-docs' está rodando na nuvem. Detalhe: ${err.message}`);
         } finally {
             setBtnLoading(buttonId, false);
         }
@@ -372,7 +321,6 @@ export default function PortalParceiro() {
     const toDateBR = (d: any) => { if (!d) return '-'; try { return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'UTC' }); } catch { return '-'; } };
     const formatMesRef = (m: string) => { if (!m) return '-'; const parts = m.split('-'); if (parts.length >= 2) return `${parts[1]}/${parts[0]}`; return m; };
 
-    // Base bruta tratada
     const data = useMemo(() => {
         if (!rawData) return [];
         const parseNum = (val: any) => (val === null || val === undefined || val === '') ? 0 : (isNaN(Number(val)) ? 0 : Number(val));
@@ -394,7 +342,7 @@ export default function PortalParceiro() {
             is_consorcio: d.is_consorcio || 'Não',
             fonte_dados: d.fonte_dados, 
             boleto_simplifica: parseNum(d.boleto_simplifica) || parseNum(d.valor_real_cobranca),
-            consumo_kwh: parseNum(d.consumo_kwh),
+            consumo_kwh: parseNum(d.consumo_kwh), 
             consumo_crm_kwh: (parseNum(d.consumo_crm_mwh) || parseNum(d['consumo_médio_na_venda_mwh'])) * 1000,
             compensacao_kwh: parseNum(d.compensacao_kwh) || parseNum(d['compensação_total_kwh']),
             eficiencia_compensacao: parseNum(d.eficiencia_compensacao),
@@ -408,7 +356,7 @@ export default function PortalParceiro() {
             codigo_barras: d.codigo_barras,
             asaas_id: d.asaas_id,
             id_chave_composta: d.id_chave_composta || `${d.uc}-${d['mês_referência']}`,
-            link_fatura: d.link_fatura // campo do banco que tem o UUID da lumi ou link direto
+            link_boleto: d.link_boleto || d.link_fatura || d.l_link || d.u_link || null
         }));
 
         dadosTratados = dadosTratados.filter((d: any) => {
@@ -586,7 +534,6 @@ export default function PortalParceiro() {
         document.body.removeChild(link);
     };
 
-    // --- CÁLCULO DOS DADOS DO RELATÓRIO DO CLIENTE ---
     const relatorioData = useMemo(() => {
         if (!relatorioUc) return null;
         
@@ -609,14 +556,13 @@ export default function PortalParceiro() {
         
         let sumEficiencia = 0;
         let countEficiencia = 0;
-        const chartData: any[] = [];
+        let chartData: any[] = [];
 
         historico.forEach(row => {
             totalEco += (row.economia_rs || 0);
             totalComp += (row.compensacao_kwh || 0);
             totalConsumo += (row.consumo_kwh || 0);
 
-            // Regra Matemática: Valor Sem Simplifica vs Valor Pago
             let isEqGoConsorcio = row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM';
             let pagoSimplifica = row.boleto_simplifica || 0;
             let faturaDist = row.valor_fatura_distribuidora || 0;
@@ -650,6 +596,9 @@ export default function PortalParceiro() {
         const mesesGratis = mediaCustoSem > 0 ? (totalEco / mediaCustoSem) : 0;
         
         const ultimasFaturas = [...historico].reverse().slice(0, 6);
+        
+        // LIMITA O GRÁFICO AOS ÚLTIMOS 12 MESES
+        chartData = chartData.slice(-12);
 
         return {
             infoCadastral,
@@ -688,14 +637,14 @@ export default function PortalParceiro() {
     return (
         <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col">
             
-            {/* CSS BLINDADO PARA IMPRESSÃO EM A4 (FUNDO ESCURO OBRIGATÓRIO) */}
+            {/* CSS BLINDADO PARA IMPRESSÃO EM A4 (FUNDO ESCURO NEUTRO E ENQUADRAMENTO VERTICAL) */}
             {activeTab === 'relatorio' && (
                 <style>
                     {`
                         @media print {
-                            @page { size: A4 portrait; margin: 5mm; }
+                            @page { size: A4 portrait; margin: 10mm; }
                             html, body, #root {
-                                background-color: #020617 !important;
+                                background-color: #0a0a0a !important;
                                 color: white !important;
                                 -webkit-print-color-adjust: exact !important;
                                 print-color-adjust: exact !important;
@@ -703,6 +652,8 @@ export default function PortalParceiro() {
                                 margin: 0 !important;
                                 padding: 0 !important;
                             }
+                            .bg-slate-900 { background-color: #111827 !important; }
+                            .bg-slate-950 { background-color: #0a0a0a !important; }
                             .page-break-inside-avoid {
                                 page-break-inside: avoid !important;
                                 break-inside: avoid !important;
@@ -886,16 +837,15 @@ export default function PortalParceiro() {
                                             const isAlexandria = row.quem_indicou === 'Alexandria - LEX';
                                             const chaveLinha = row.id_chave_composta || `${row.uc}-${row.mes_referencia}`;
 
-                                            // Cor da Eficiência
                                             const eficPercent = (row.eficiencia_compensacao || 0) * 100;
                                             let eficColor = 'text-rose-400';
                                             let eficBg = 'bg-rose-900/40 border-rose-800/50';
                                             if (eficPercent >= 90) { eficColor = 'text-emerald-400'; eficBg = 'bg-emerald-900/40 border-emerald-800/50'; }
                                             else if (eficPercent >= 70) { eficColor = 'text-yellow-400'; eficBg = 'bg-yellow-900/40 border-yellow-800/50'; }
 
-                                            // Link direto da Lumi se for o caso
-                                            const faturaLumiUrl = (row.fonte_dados === 'LUMI' && row.link_fatura) 
-                                                ? `https://api.labs-lumi.com.br/faturas/download/${row.link_fatura}` 
+                                            // Lógica Limpa de Links da Lumi (Abrir direto no navegador evita CORS)
+                                            const linkBoletoLumiDireto = row.fonte_dados === 'LUMI' && row.link_boleto 
+                                                ? `https://api.labs-lumi.com.br/faturas/download/${row.link_boleto}` 
                                                 : null;
 
                                             return (
@@ -914,14 +864,14 @@ export default function PortalParceiro() {
                                                                     <button 
                                                                         onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'FATURA', `btn_fat_${chaveLinha}`)}
                                                                         disabled={loadingDownloads[`btn_fat_${chaveLinha}`]}
-                                                                        title="Fatura da Concessionária (Unifica)" 
+                                                                        title="Fatura da Concessionária (Plataforma Gestão)" 
                                                                         className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors disabled:opacity-50"
                                                                     >
                                                                         {loadingDownloads[`btn_fat_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16} />}
                                                                     </button>
-                                                                ) : faturaLumiUrl ? (
+                                                                ) : linkBoletoLumiDireto ? (
                                                                     <a 
-                                                                        href={faturaLumiUrl} 
+                                                                        href={linkBoletoLumiDireto} 
                                                                         target="_blank" rel="noopener noreferrer" 
                                                                         title="Fatura da Concessionária (Lumi)" 
                                                                         className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors flex items-center justify-center"
@@ -939,20 +889,20 @@ export default function PortalParceiro() {
                                                                     <button 
                                                                         onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'BOLETO', `btn_bol_${chaveLinha}`)}
                                                                         disabled={loadingDownloads[`btn_bol_${chaveLinha}`]}
-                                                                        title="Boleto Simplifica (Unifica)" 
+                                                                        title="Boleto Simplifica (Plataforma Gestão)" 
                                                                         className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50"
                                                                     >
                                                                         {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
                                                                     </button>
-                                                                ) : row.fonte_dados === 'LUMI' ? (
-                                                                    <button 
-                                                                        onClick={() => handleDownloadLumiBoleto(row.uc, row.mes_referencia, `btn_bol_${chaveLinha}`)}
-                                                                        disabled={loadingDownloads[`btn_bol_${chaveLinha}`]}
-                                                                        title="Gerar PDF Boleto Simplifica (Lumi)" 
-                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50"
+                                                                ) : linkBoletoLumiDireto ? (
+                                                                    <a 
+                                                                        href={linkBoletoLumiDireto} 
+                                                                        target="_blank" rel="noopener noreferrer" 
+                                                                        title="Boleto Simplifica (Lumi)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors flex items-center justify-center"
                                                                     >
-                                                                        {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
-                                                                    </button>
+                                                                        <Receipt size={16} />
+                                                                    </a>
                                                                 ) : (
                                                                     <div title="Link de cobrança não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed">
                                                                         <Receipt size={16} />
@@ -1015,7 +965,7 @@ export default function PortalParceiro() {
                                                     {colunasAtivas.includes('Economia (R$)') && <td className="px-5 py-3 text-right text-emerald-500">{formatMoney(row.economia_rs)}</td>}
                                                     {colunasAtivas.includes('Data Ganho') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.data_ganho)}</td>}
                                                     {colunasAtivas.includes('Data Protocolo') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.data_protocolo)}</td>}
-                                                    {colunasAtivas.includes('Data Cancelamento') && <td className="px-5 py-3 text-xs text-rose-500/70">{toDateBR(row.data_cancelamento)}</td>}
+                                                    {colunasAtivas.includes('Data Cancelamento') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.data_cancelamento)}</td>}
                                                     {colunasAtivas.includes('Data Emissão') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.data_emissao)}</td>}
                                                     {colunasAtivas.includes('Vencimento') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.vencimento)}</td>}
                                                     
@@ -1127,12 +1077,12 @@ export default function PortalParceiro() {
                             </button>
                         </div>
 
-                        {/* O RELATÓRIO EM SI (Forçando fundo escuro mesmo na impressão, constrito no A4) */}
+                        {/* O RELATÓRIO EM SI */}
                         {relatorioData ? (
-                            <div className="bg-slate-900 print:bg-[#020617] border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-0 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full print:text-white page-break-inside-avoid">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-0 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full page-break-inside-avoid">
                                 
                                 {/* HEADER RELATÓRIO */}
-                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-3 mb-6 print:mb-4">
+                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-3 mb-6 print:mb-5">
                                     <div>
                                         <h1 className="text-3xl print:text-2xl font-display font-bold text-white mb-1">{relatorioData.infoCadastral.nome_cliente}</h1>
                                         <p className="text-slate-400 font-mono text-sm print:text-xs">UC: {relatorioData.infoCadastral.uc}</p>
@@ -1145,23 +1095,23 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* INFO CADASTRAL E STATUS */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-2 mb-8 print:mb-4">
-                                    <div className="bg-slate-950 p-4 print:p-2 rounded-xl border border-slate-800 print:border-slate-800">
-                                        <p className="text-[10px] print:text-[8px] font-bold text-slate-500 uppercase mb-1">Concessionária</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-3 mb-8 print:mb-6">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                        <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Concessionária</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">{relatorioData.infoCadastral.concessionaria}</p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-2 rounded-xl border border-slate-800 print:border-slate-800">
-                                        <p className="text-[10px] print:text-[8px] font-bold text-slate-500 uppercase mb-1">Cliente Desde</p>
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                        <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Cliente Desde</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">{toDateBR(relatorioData.infoCadastral.data_ganho) !== '-' ? toDateBR(relatorioData.infoCadastral.data_ganho) : 'Não informado'}</p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-2 rounded-xl border border-slate-800 print:border-slate-800">
-                                        <p className="text-[10px] print:text-[8px] font-bold text-slate-500 uppercase mb-1">Eficiência Média</p>
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                        <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Eficiência Média</p>
                                         <p className={`text-sm print:text-xs font-bold ${relatorioData.eficienciaMedia >= 90 ? 'text-emerald-400' : relatorioData.eficienciaMedia >= 70 ? 'text-yellow-400' : 'text-rose-400'}`}>
                                             {relatorioData.eficienciaMedia > 0 ? relatorioData.eficienciaMedia.toFixed(1) + '%' : 'N/D'}
                                         </p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-2 rounded-xl border border-slate-800 print:border-slate-800">
-                                        <p className="text-[10px] print:text-[8px] font-bold text-slate-500 uppercase mb-1">Consumo Total</p>
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                        <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Consumo Total</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">
                                             {Math.round(relatorioData.totalConsumo).toLocaleString('pt-BR')} kWh
                                         </p>
@@ -1169,52 +1119,52 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* GRANDES NÚMEROS DE ECONOMIA E COMPENSAÇÃO */}
-                                <div className="flex flex-col sm:flex-row gap-6 print:gap-4 mb-8 print:mb-4 page-break-inside-avoid">
-                                    <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 print:border-emerald-800/50 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
-                                        <PiggyBank size={32} className="text-emerald-500 mb-3 print:mb-1 print:h-6 print:w-6"/>
-                                        <p className="text-xs print:text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Economia Total Acumulada</p>
-                                        <h2 className="text-4xl print:text-2xl font-display font-extrabold text-white">{formatMoney(relatorioData.totalEco)}</h2>
+                                <div className="flex flex-col sm:flex-row gap-6 print:gap-4 mb-8 print:mb-6 page-break-inside-avoid">
+                                    <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
+                                        <PiggyBank size={32} className="text-emerald-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
+                                        <p className="text-xs print:text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Economia Total Acumulada</p>
+                                        <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{formatMoney(relatorioData.totalEco)}</h2>
                                         
                                         {relatorioData.mesesGratis > 0 && (
-                                            <div className="mt-3 print:mt-2 bg-emerald-500/20 text-emerald-400 px-3 py-1 print:py-0.5 rounded-full text-[10px] print:text-[8px] font-bold uppercase tracking-wider border border-emerald-500/30">
+                                            <div className="mt-3 print:mt-2 bg-emerald-500/20 text-emerald-400 px-3 py-1 print:py-1 rounded-full text-[10px] print:text-[9px] font-bold uppercase tracking-wider border border-emerald-500/30">
                                                 🎉 Equivale a {relatorioData.mesesGratis.toFixed(1).replace('.0', '')} faturas grátis
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex-1 bg-blue-900/10 border border-blue-800/30 print:border-blue-800/50 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
-                                        <Zap size={32} className="text-blue-500 mb-3 print:mb-1 print:h-6 print:w-6"/>
-                                        <p className="text-xs print:text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-1">Total de Energia Compensada</p>
-                                        <h2 className="text-4xl print:text-2xl font-display font-extrabold text-white">{Math.round(relatorioData.totalComp).toLocaleString('pt-BR')} <span className="text-lg print:text-sm text-blue-400">kWh</span></h2>
+                                    <div className="flex-1 bg-blue-900/10 border border-blue-800/30 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
+                                        <Zap size={32} className="text-blue-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
+                                        <p className="text-xs print:text-[11px] font-bold text-blue-500 uppercase tracking-widest mb-1">Total de Energia Compensada</p>
+                                        <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{Math.round(relatorioData.totalComp).toLocaleString('pt-BR')} <span className="text-lg print:text-base text-blue-400">kWh</span></h2>
                                     </div>
                                 </div>
 
                                 {/* MÉTRICAS FINANCEIRAS COMPARATIVAS */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-2 mb-8 print:mb-6 page-break-inside-avoid">
-                                    <div className="bg-slate-900 p-4 print:p-2 border border-slate-700 rounded-xl flex justify-between items-center">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-3 mb-8 print:mb-8 page-break-inside-avoid">
+                                    <div className="bg-slate-900 p-4 print:p-3 border border-slate-700 rounded-xl flex justify-between items-center">
                                         <div className="flex items-center gap-3 print:gap-2">
-                                            <div className="bg-rose-500/10 p-2 print:p-1 rounded-full"><TrendingUp size={18} className="text-rose-400 print:h-4 print:w-4"/></div>
-                                            <span className="text-sm print:text-[10px] font-bold text-slate-400">Total que seria pago na Concessionária</span>
+                                            <div className="bg-rose-500/10 p-2 print:p-1.5 rounded-full"><TrendingUp size={18} className="text-rose-400 print:h-5 print:w-5"/></div>
+                                            <span className="text-sm print:text-xs font-bold text-slate-400">Sem a Simplifica Energia</span>
                                         </div>
-                                        <span className="text-lg print:text-sm font-bold text-white">{formatMoney(relatorioData.custoSem)}</span>
+                                        <span className="text-lg print:text-base font-bold text-white">{formatMoney(relatorioData.custoSem)}</span>
                                     </div>
-                                    <div className="bg-slate-900 p-4 print:p-2 border border-emerald-500/30 rounded-xl flex justify-between items-center">
+                                    <div className="bg-slate-900 p-4 print:p-3 border border-emerald-500/30 rounded-xl flex justify-between items-center">
                                         <div className="flex items-center gap-3 print:gap-2">
-                                            <div className="bg-emerald-500/10 p-2 print:p-1 rounded-full"><CheckCircle2 size={18} className="text-emerald-400 print:h-4 print:w-4"/></div>
-                                            <span className="text-sm print:text-[10px] font-bold text-emerald-400">Total Pago com a Simplifica</span>
+                                            <div className="bg-emerald-500/10 p-2 print:p-1.5 rounded-full"><CheckCircle2 size={18} className="text-emerald-400 print:h-5 print:w-5"/></div>
+                                            <span className="text-sm print:text-xs font-bold text-emerald-400">Com a Simplifica Energia</span>
                                         </div>
-                                        <span className="text-xl print:text-sm font-bold text-white">{formatMoney(relatorioData.custoCom)}</span>
+                                        <span className="text-xl print:text-lg font-bold text-white">{formatMoney(relatorioData.custoCom)}</span>
                                     </div>
                                 </div>
 
                                 {/* GRÁFICO (ÚNICO E ALARGADO) */}
-                                <div className="mb-8 print:mb-4 page-break-inside-avoid">
-                                    <h3 className="text-sm print:text-[10px] font-bold text-slate-300 mb-4 print:mb-2 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (kWh)</h3>
-                                    <div className="w-full" style={{ height: '220px' }}>
+                                <div className="mb-8 print:mb-10 page-break-inside-avoid">
+                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-4 print:mb-4 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (Últimos 12 meses)</h3>
+                                    <div className="w-full h-[300px] print:h-[280px]">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 10, left: -20, bottom: 35 }} barGap={2}>
+                                            <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }} barGap={2}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                                <XAxis dataKey="mes" stroke="#64748b" fontSize={9} axisLine={false} tickLine={false} tickMargin={8} angle={-35} textAnchor="end" />
-                                                <YAxis stroke="#64748b" fontSize={9} axisLine={false} tickLine={false}/>
+                                                <XAxis dataKey="mes" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickMargin={10}/>
+                                                <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false}/>
                                                 <Bar dataKey="consumo" fill="#3b82f6" radius={[2, 2, 0, 0]} name="Consumo (kWh)" isAnimationActive={false} />
                                                 <Bar dataKey="compensacao" fill="#eab308" radius={[2, 2, 0, 0]} name="Compensação (kWh)" isAnimationActive={false} />
                                             </BarChart>
@@ -1223,18 +1173,18 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* EXTRATO FINAL DAS ÚLTIMAS FATURAS */}
-                                <div className="page-break-inside-avoid mt-8">
-                                    <h3 className="text-sm print:text-[10px] font-bold text-slate-300 mb-4 print:mb-2 border-b border-slate-800 pb-2 print:pb-1">Extrato das Últimas Faturas</h3>
-                                    <table className="w-full text-sm print:text-[9px] text-left">
-                                        <thead className="text-xs print:text-[8px] uppercase text-slate-500 border-b border-slate-800">
+                                <div className="page-break-inside-avoid pt-4 print:pt-6">
+                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-4 print:mb-3 border-b border-slate-800 pb-2">Extrato das Últimas Faturas</h3>
+                                    <table className="w-full text-sm print:text-xs text-left">
+                                        <thead className="text-xs print:text-[10px] uppercase text-slate-500 border-b border-slate-800">
                                             <tr>
-                                                <th className="py-2 print:py-1">Mês Ref.</th>
-                                                <th className="py-2 print:py-1">Vencimento</th>
-                                                <th className="py-2 print:py-1 text-right">Consumo</th>
-                                                <th className="py-2 print:py-1 text-right">Compensação</th>
-                                                <th className="py-2 print:py-1 text-center">Eficiência</th>
-                                                <th className="py-2 print:py-1 text-right">Boleto (R$)</th>
-                                                <th className="py-2 print:py-1 text-right">Economia</th>
+                                                <th className="py-2 print:py-1.5">Mês Ref.</th>
+                                                <th className="py-2 print:py-1.5">Vencimento</th>
+                                                <th className="py-2 print:py-1.5 text-right">Consumo</th>
+                                                <th className="py-2 print:py-1.5 text-right">Compensação</th>
+                                                <th className="py-2 print:py-1.5 text-center">Eficiência</th>
+                                                <th className="py-2 print:py-1.5 text-right">Boleto (R$)</th>
+                                                <th className="py-2 print:py-1.5 text-right">Economia</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800/50">
@@ -1242,13 +1192,13 @@ export default function PortalParceiro() {
                                                 const eficPercent = row.eficiencia_compensacao * 100;
                                                 return (
                                                     <tr key={i} className="text-slate-300">
-                                                        <td className="py-2 print:py-1.5 font-mono text-xs print:text-[8px]">{formatMesRef(row.mes_referencia)}</td>
-                                                        <td className="py-2 print:py-1.5 text-xs print:text-[8px]">{toDateBR(row.vencimento)}</td>
-                                                        <td className="py-2 print:py-1.5 text-right text-xs print:text-[8px]">{Math.round(row.consumo_kwh).toLocaleString('pt-BR')} kWh</td>
-                                                        <td className="py-2 print:py-1.5 text-right text-xs print:text-[8px]">{Math.round(row.compensacao_kwh).toLocaleString('pt-BR')} kWh</td>
-                                                        <td className="py-2 print:py-1.5 text-center text-xs print:text-[8px]">{row.eficiencia_compensacao > 0 ? eficPercent.toFixed(1) + '%' : '-'}</td>
-                                                        <td className="py-2 print:py-1.5 text-right text-xs print:text-[8px]">{formatMoney(row.boleto_simplifica)}</td>
-                                                        <td className="py-2 print:py-1.5 text-right font-bold text-emerald-400 text-xs print:text-[8px]">{formatMoney(row.economia_rs)}</td>
+                                                        <td className="py-2 print:py-2 font-mono text-xs">{formatMesRef(row.mes_referencia)}</td>
+                                                        <td className="py-2 print:py-2 text-xs">{toDateBR(row.vencimento)}</td>
+                                                        <td className="py-2 print:py-2 text-right text-xs">{Math.round(row.consumo_kwh).toLocaleString('pt-BR')} kWh</td>
+                                                        <td className="py-2 print:py-2 text-right text-xs">{Math.round(row.compensacao_kwh).toLocaleString('pt-BR')} kWh</td>
+                                                        <td className="py-2 print:py-2 text-center text-xs">{row.eficiencia_compensacao > 0 ? eficPercent.toFixed(1) + '%' : '-'}</td>
+                                                        <td className="py-2 print:py-2 text-right text-xs">{formatMoney(row.boleto_simplifica)}</td>
+                                                        <td className="py-2 print:py-2 text-right font-bold text-emerald-400 text-xs">{formatMoney(row.economia_rs)}</td>
                                                     </tr>
                                                 )
                                             })}
