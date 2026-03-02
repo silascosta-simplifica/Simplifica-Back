@@ -6,7 +6,7 @@ import {
     LogOut, Table as TableIcon, Search, Settings2, Check, 
     ChevronDown, ChevronLeft, ChevronRight, Loader2,
     Zap, PiggyBank, Receipt, Download, Users, FileDown, Sparkles,
-    Target, FileCheck, ExternalLink, ShieldAlert, Clock, FileText, Printer, Activity, TrendingUp, CheckCircle2
+    Target, FileCheck, ExternalLink, ShieldAlert, Clock, FileText, Printer, Activity, TrendingUp, CheckCircle2, Wallet
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 
@@ -136,8 +136,9 @@ export default function PortalCamila() {
     const [filtroCiclo, setFiltroCiclo] = useState<string[]>([]); 
     const [filtroEtapa, setFiltroEtapa] = useState<string[]>([]); 
     
-    const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Mês Referência', 'Ciclo', '1ª Economia', 'Economia (R$)', 'Status Pagamento', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Etapa', 'Motivo Cancelamento'];
-    const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Mês Referência', 'Ciclo', '1ª Economia', 'Status Pagamento', 'Eficiência (%)']);
+    // Modificado para Saldo (kWh)
+    const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Mês Referência', 'Ciclo', '1ª Economia', 'Economia (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Etapa', 'Motivo Cancelamento'];
+    const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Mês Referência', 'Ciclo', '1ª Economia', 'Status Pagamento', 'Eficiência (%)', 'Saldo (kWh)']);
 
     const [page, setPage] = useState(1);
     const ITEMS_PER_PAGE = 25;
@@ -288,6 +289,7 @@ export default function PortalCamila() {
                 compensacao_kwh: parseNum(d.compensacao_kwh) || parseNum(d['compensação_total_kwh']),
                 eficiencia_compensacao: parseNum(d.eficiencia_compensacao),
                 economia_rs: parseNum(d.economia_rs),
+                saldo: parseNum(d.saldo), 
                 objetivo_etapa: d.objetivo_etapa || 'Sem Etapa',
                 motivo_cancelamento: d.motivo_cancelamento || d['Motivo do cancelamento'] || '',
                 data_ganho: d.data_ganho,
@@ -308,12 +310,15 @@ export default function PortalCamila() {
         const dadosComCiclo: any[] = [];
 
         Object.values(ucsMap).forEach(grupoUc => {
-            grupoUc.sort((a: any, b: any) => getSortableDate(a.mes_referencia) - getSortableDate(b.mes_referencia));
+            // Ordena o histórico do mais recente para o mais antigo
+            grupoUc.sort((a: any, b: any) => getSortableDate(b.mes_referencia) - getSortableDate(a.mes_referencia));
 
             let dataPrimeiraEconomia: string | null = null;
             let jaTevePrimeiroFaturamento = false;
 
-            for (const row of grupoUc) {
+            // Para achar primeira economia tem que iterar do mais antigo pro mais recente
+            const grupoUcReverse = [...grupoUc].reverse();
+            for (const row of grupoUcReverse) {
                 const statusNormalizado = getPaymentBadge(row.status).text;
                 const isValido = statusNormalizado !== '-' && row.status !== 'Em análise';
                 
@@ -454,6 +459,7 @@ export default function PortalCamila() {
         let totalPrimeiros = 0;
         
         const totals = filteredData.reduce((acc, row) => {
+            // A PRIMEIRA vez que uma UC cai aqui, é sempre o mês mais recente dela.
             if (!uniqueUcs.has(row.uc)) {
                 uniqueUcs.add(row.uc);
                 
@@ -463,6 +469,9 @@ export default function PortalCamila() {
                 else if (et === 'OPERACIONAL') countsEtapas.operacional++;
                 else if (et === 'EM EXCLUSÃO') countsEtapas.emExclusao++;
                 else if (et === 'EXCLUÍDO') countsEtapas.excluido++;
+
+                // Puxa estritamente o Saldo (em kWh) do mês mais recente da UC
+                acc.saldoAtual += (row.saldo || 0);
             }
 
             acc.consumo += (row.consumo_kwh || 0);
@@ -478,7 +487,7 @@ export default function PortalCamila() {
             }
 
             return acc;
-        }, { consumo: 0, compensacao: 0, boleto: 0, economia: 0 });
+        }, { consumo: 0, compensacao: 0, boleto: 0, economia: 0, saldoAtual: 0 });
 
         return { 
             ...totals, 
@@ -511,7 +520,7 @@ export default function PortalCamila() {
     const handleDownloadCSV = () => {
         if (filteredData.length === 0) return;
 
-        const headers = ['UC', 'Cliente', 'Concessionária', 'Mes Referencia', 'Consumo (kWh)', 'Compensacao (kWh)', 'Eficiencia (%)', 'Boleto (R$)', 'Fatura Dist (R$)', 'Economia (R$)', 'Status Pagamento', 'Ciclo', 'Data 1a Economia', 'Etapa', 'Motivo Cancelamento'];
+        const headers = ['UC', 'Cliente', 'Concessionária', 'Mes Referencia', 'Consumo (kWh)', 'Compensacao (kWh)', 'Eficiencia (%)', 'Boleto (R$)', 'Fatura Dist (R$)', 'Economia (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Ciclo', 'Data 1a Economia', 'Etapa', 'Motivo Cancelamento'];
         
         const csvRows = filteredData.map(row => {
             const badge = getPaymentBadge(row.status);
@@ -528,6 +537,7 @@ export default function PortalCamila() {
                 row.boleto_simplifica,
                 row.valor_fatura_distribuidora || 0,
                 row.economia_rs || 0,
+                row.saldo || 0, 
                 badge.text !== '-' ? badge.text : '',
                 row.ciclo,
                 row.data_primeira_economia,
@@ -681,9 +691,6 @@ export default function PortalCamila() {
                                 margin: 10mm; 
                             }
                             
-                            /* O pulo do gato: remove o flex que cortava a tabela
-                               e define TUDO com a mesma cor do relatório (#0f172a / bg-slate-900) 
-                               para apagar a borda escura! */
                             html, body, #root {
                                 background-color: #0f172a !important; 
                                 color: white !important;
@@ -696,12 +703,10 @@ export default function PortalCamila() {
                                 padding: 0 !important;
                             }
                             
-                            /* Dá um respiro pro relatório não colar no teto da folha */
                             #relatorio-print-container {
                                 margin-top: 15mm !important;
                             }
                             
-                            /* Resolve a sobreposição: define margem gigante no gráfico para empurrar a tabela pra longe */
                             .recharts-responsive-container {
                                 width: 100% !important;
                                 height: 220px !important; 
@@ -720,8 +725,8 @@ export default function PortalCamila() {
             {/* CABEÇALHO */}
             <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center sticky top-0 z-40 print:hidden">
                 <div className="flex items-center gap-4">
-                    <div className="h-8 w-8 bg-purple-600 rounded-lg flex items-center justify-center">
-                        <Sparkles size={18} className="text-white" />
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-700 shadow-sm">
+                        <img src="https://i.pinimg.com/280x280_RS/8f/86/30/8f86306f4e4fc34bbf95f4148750ca5f.jpg" alt="Profile Camila" className="h-full w-full object-cover" />
                     </div>
                     <div>
                         <h1 className="text-lg font-bold font-display text-white tracking-wide">Portal da Camila</h1>
@@ -752,46 +757,66 @@ export default function PortalCamila() {
                             {/* ESQUERDA (75%) */}
                             <div className="xl:col-span-3 flex flex-col gap-6">
                                 
-                                {/* LINHA 1: KPIS PRINCIPAIS */}
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 shadow-sm min-w-0">
-                                        <div className="bg-blue-500/10 p-3 rounded-full shrink-0"><Users size={20} className="text-blue-400"/></div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5 truncate">UCs Filtradas</p>
-                                            <p className="text-lg lg:text-xl font-bold font-mono text-white truncate">{new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}</p>
+                                {/* LINHA 1: KPIS PRINCIPAIS - Layout Repaginado */}
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                        <div className="flex items-center gap-1.5">
+                                            <Users size={14} className="text-blue-400"/>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">UCs Filtradas</p>
                                         </div>
+                                        <p className="text-xl lg:text-2xl font-bold font-mono text-white truncate w-full" title={new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}>
+                                            {new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}
+                                        </p>
                                     </div>
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 shadow-sm min-w-0">
-                                        <div className="bg-blue-500/10 p-3 rounded-full shrink-0"><Zap size={20} className="text-blue-500"/></div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5 truncate">Consumo Real</p>
-                                            <p className="text-lg lg:text-xl font-bold font-mono text-white truncate" title={Math.round(metrics.consumo).toLocaleString('pt-BR')}>
-                                                {Math.round(metrics.consumo).toLocaleString('pt-BR')} <span className="text-[10px] text-slate-400">kWh</span>
-                                            </p>
+                                    
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                        <div className="flex items-center gap-1.5">
+                                            <Zap size={14} className="text-blue-500"/>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Consumo Real</p>
                                         </div>
+                                        <p className="text-xl lg:text-2xl font-bold font-mono text-white truncate w-full" title={Math.round(metrics.consumo).toLocaleString('pt-BR')}>
+                                            {Math.round(metrics.consumo).toLocaleString('pt-BR')} <span className="text-sm text-slate-400 font-normal">kWh</span>
+                                        </p>
                                     </div>
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 shadow-sm min-w-0">
-                                        <div className="bg-emerald-500/10 p-3 rounded-full shrink-0"><Zap size={20} className="text-emerald-500"/></div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5 truncate">Compensação</p>
-                                            <p className="text-lg lg:text-xl font-bold font-mono text-white truncate" title={Math.round(metrics.compensacao).toLocaleString('pt-BR')}>
-                                                {Math.round(metrics.compensacao).toLocaleString('pt-BR')} <span className="text-[10px] text-slate-400">kWh</span>
-                                            </p>
+
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                        <div className="flex items-center gap-1.5">
+                                            <Zap size={14} className="text-emerald-500"/>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Compensação</p>
                                         </div>
+                                        <p className="text-xl lg:text-2xl font-bold font-mono text-white truncate w-full" title={Math.round(metrics.compensacao).toLocaleString('pt-BR')}>
+                                            {Math.round(metrics.compensacao).toLocaleString('pt-BR')} <span className="text-sm text-slate-400 font-normal">kWh</span>
+                                        </p>
                                     </div>
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 shadow-sm min-w-0">
-                                        <div className="bg-yellow-500/10 p-3 rounded-full shrink-0"><Receipt size={20} className="text-yellow-500"/></div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5 truncate">Faturamento</p>
-                                            <p className="text-lg lg:text-xl font-bold font-display text-white truncate" title={formatMoney(metrics.boleto)}>{formatMoney(metrics.boleto)}</p>
+
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                        <div className="flex items-center gap-1.5">
+                                            <Receipt size={14} className="text-yellow-500"/>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Faturamento</p>
                                         </div>
+                                        <p className="text-xl lg:text-2xl font-bold font-display text-white truncate w-full" title={formatMoney(metrics.boleto)}>
+                                            {formatMoney(metrics.boleto)}
+                                        </p>
                                     </div>
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 shadow-sm min-w-0">
-                                        <div className="bg-emerald-500/10 p-3 rounded-full shrink-0"><PiggyBank size={20} className="text-emerald-400"/></div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5 truncate">Economia Gerada</p>
-                                            <p className="text-lg lg:text-xl font-bold font-display text-emerald-400 truncate" title={formatMoney(metrics.economia)}>{formatMoney(metrics.economia)}</p>
+
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                        <div className="flex items-center gap-1.5">
+                                            <PiggyBank size={14} className="text-emerald-400"/>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Economia Gerada</p>
                                         </div>
+                                        <p className="text-xl lg:text-2xl font-bold font-display text-emerald-400 truncate w-full" title={formatMoney(metrics.economia)}>
+                                            {formatMoney(metrics.economia)}
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                        <div className="flex items-center gap-1.5">
+                                            <Wallet size={14} className="text-cyan-400"/>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Saldo (Atual)</p>
+                                        </div>
+                                        <p className="text-xl lg:text-2xl font-bold font-mono text-cyan-400 truncate w-full" title={Math.round(metrics.saldoAtual).toLocaleString('pt-BR')}>
+                                            {Math.round(metrics.saldoAtual).toLocaleString('pt-BR')} <span className="text-sm text-cyan-400/50 font-normal">kWh</span>
+                                        </p>
                                     </div>
                                 </div>
 
@@ -977,10 +1002,12 @@ export default function PortalCamila() {
                                             {colunasAtivas.includes('Fatura Dist. (R$)') && <th className="px-5 py-4 text-right text-slate-300">Fatura Dist. (R$)</th>}
                                             {colunasAtivas.includes('Eficiência (%)') && <th className="px-5 py-4 text-center">Eficiência (%)</th>}
                                             
+                                            {colunasAtivas.includes('Economia (R$)') && <th className="px-5 py-4 text-right text-emerald-400">Economia (R$)</th>}
+                                            {colunasAtivas.includes('Saldo (kWh)') && <th className="px-5 py-4 text-right text-cyan-400">Saldo (kWh)</th>}
+                                            
                                             {colunasAtivas.includes('Status Pagamento') && <th className="px-5 py-4 text-center">Status</th>}
                                             {colunasAtivas.includes('Concessionária') && <th className="px-5 py-4">Concessionária</th>}
                                             {colunasAtivas.includes('Mês Referência') && <th className="px-5 py-4 text-center">Mês Ref.</th>}
-                                            {colunasAtivas.includes('Economia (R$)') && <th className="px-5 py-4 text-right text-emerald-400">Economia (R$)</th>}
                                             {colunasAtivas.includes('Etapa') && <th className="px-5 py-4 text-xs text-slate-300">Etapa</th>}
                                             {colunasAtivas.includes('Motivo Cancelamento') && <th className="px-5 py-4 text-xs text-rose-300">Motivo Cancelamento</th>}
                                         </tr>
@@ -1074,6 +1101,11 @@ export default function PortalCamila() {
                                                         </td>
                                                     )}
 
+                                                    {colunasAtivas.includes('Economia (R$)') && <td className="px-5 py-3 text-right font-medium text-emerald-500">{formatMoney(row.economia_rs)}</td>}
+                                                    
+                                                    {/* NOVO: Coluna de Saldo usando toLocaleString para kWh */}
+                                                    {colunasAtivas.includes('Saldo (kWh)') && <td className="px-5 py-3 text-right font-mono text-cyan-400">{Number(row.saldo || 0).toLocaleString('pt-BR')}</td>}
+
                                                     {colunasAtivas.includes('Status Pagamento') && (
                                                         <td className="px-5 py-3 text-center">
                                                             {badge.text !== '-' ? <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold border ${badge.color} ${badge.bg}`}>{badge.text}</span> : <span className="text-slate-600">-</span>}
@@ -1081,7 +1113,6 @@ export default function PortalCamila() {
                                                     )}
                                                     {colunasAtivas.includes('Concessionária') && <td className="px-5 py-3 text-xs text-slate-400">{row.concessionaria || '-'}</td>}
                                                     {colunasAtivas.includes('Mês Referência') && <td className="px-5 py-3 text-center font-mono text-xs text-slate-400">{row.mes_referencia}</td>}
-                                                    {colunasAtivas.includes('Economia (R$)') && <td className="px-5 py-3 text-right text-emerald-500">{formatMoney(row.economia_rs)}</td>}
                                                     {colunasAtivas.includes('Etapa') && <td className="px-5 py-3 text-xs text-slate-300">{row.objetivo_etapa || '-'}</td>}
                                                     {colunasAtivas.includes('Motivo Cancelamento') && <td className="px-5 py-3 text-xs text-rose-300/70 truncate max-w-[150px]" title={row.motivo_cancelamento}>{row.motivo_cancelamento || '-'}</td>}
                                                 </tr>

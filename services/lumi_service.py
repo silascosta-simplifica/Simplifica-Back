@@ -33,7 +33,8 @@ CAMPOS_LUMI = [
     "uc", "nome", "mes_referencia", "consumo_total_faturado_qt", "valor_total_fatura", "drive_id",
     "payments.energia_compensada", "payments.economia", "payments.status_cobranca_asaas",
     "payments.vencimento", "payments.remuneracao_geracao", "payments.sent_at",
-    "payments.asaas_payment_id" # <--- CAMPO ADICIONADO PARA O PIX DO ASAAS
+    "payments.asaas_payment_id", # CAMPO PARA O PIX DO ASAAS
+    "creditos_estoque_tot" # <--- NOVO CAMPO ADICIONADO
 ]
 
 # Conexão com Banco
@@ -81,7 +82,8 @@ def processar_fatura(item, nome_conta):
         "status_pagamento": item.get("status_cobranca_asaas"),
         "vencimento": tratar_data(item.get("vencimento")),
         "link_boleto": item.get("drive_id"), 
-        "asaas_id": item.get("asaas_payment_id"), # <--- NOVO CAMPO SENDO LIDO
+        "asaas_id": item.get("asaas_payment_id"),
+        "creditos_estoque_tot": limpar_numero(item.get("creditos_estoque_tot")), # <--- NOVO CAMPO SENDO LIDO
         "updated_at": datetime.now(),
         "origem_conta": nome_conta 
     }
@@ -107,19 +109,19 @@ def salvar_em_lotes(lista_faturas, nome_conta):
 
     if not dados_prontos: return
 
-    # 2. Query Otimizada (SQLAlchemy Core) com sintaxe corrigida
+    # 2. Query Otimizada (SQLAlchemy Core) com a nova coluna
     stmt = text("""
         INSERT INTO raw_lumi (
             uc, mes_referencia, nome_cliente, consumo_kwh, 
             energia_compensada, valor_total_fatura, economia_total, 
             remuneracao_geracao, data_envio, status_pagamento, 
-            vencimento, link_boleto, updated_at, origem_conta, asaas_id
+            vencimento, link_boleto, updated_at, origem_conta, asaas_id, creditos_estoque_tot
         )
         VALUES (
             :uc, :mes_referencia, :nome_cliente, :consumo_kwh, 
             :energia_compensada, :valor_total_fatura, :economia_total, 
             :remuneracao_geracao, :data_envio, :status_pagamento, 
-            :vencimento, :link_boleto, :updated_at, :origem_conta, :asaas_id
+            :vencimento, :link_boleto, :updated_at, :origem_conta, :asaas_id, :creditos_estoque_tot
         )
         ON CONFLICT (uc, mes_referencia) DO UPDATE SET
             nome_cliente = EXCLUDED.nome_cliente,
@@ -133,7 +135,8 @@ def salvar_em_lotes(lista_faturas, nome_conta):
             vencimento = EXCLUDED.vencimento,
             updated_at = EXCLUDED.updated_at,
             origem_conta = EXCLUDED.origem_conta,
-            asaas_id = EXCLUDED.asaas_id;
+            asaas_id = EXCLUDED.asaas_id,
+            creditos_estoque_tot = EXCLUDED.creditos_estoque_tot;
     """)
 
     # 3. Execução em Transação Única
@@ -162,7 +165,8 @@ def executar_sync_lumi():
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         full_url = f"{LUMI_URL}{LUMI_ENDPOINT}"
         
-        anos = [ "2025-01-01"]
+        # BUSCA DESDE 2023 ATÉ O ANO ATUAL
+        anos = ["2023-01-01", "2024-01-01", "2025-01-01", "2026-01-01"]
 
         for ano_inicio in anos:
             ano_fim = ano_inicio.replace("-01-01", "-12-31")
@@ -190,7 +194,7 @@ def executar_sync_lumi():
             except Exception as e: print(f"❌ Erro requisição {conta['nome']}: {e}")
 
     # =========================================================
-    # NOVO: ATUALIZA A "FOTOGRAFIA" DA VIEW MATERIALIZADA
+    # ATUALIZA A "FOTOGRAFIA" DA VIEW MATERIALIZADA
     # =========================================================
     print("\n🔄 Atualizando a View Materializada no Banco de Dados...")
     try:
@@ -200,54 +204,6 @@ def executar_sync_lumi():
         print("✅ View atualizada com sucesso! Todos os IDs e cálculos estão disponíveis.")
     except Exception as e:
         print(f"❌ Erro ao atualizar a View: {e}")
-
-if __name__ == "__main__":
-    executar_sync_lumi()    print("🚀 Iniciando Sincronização Turbo Lumi...")
-    
-    for conta in CONTAS:
-        if not conta["email"] or not conta["senha"]:
-            print(f"⚠️ Pulei conta {conta['nome']} (sem credenciais no .env)")
-            continue
-
-        print(f"\n🔑 Logando na conta: {conta['nome']} ({conta['email']})...")
-        token = login_lumi(conta["email"], conta["senha"])
-        
-        if not token: 
-            print(f"❌ Falha no login da conta {conta['nome']}")
-            continue
-
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        full_url = f"{LUMI_URL}{LUMI_ENDPOINT}"
-        
-        # Como o banco é novo, vamos buscar desde 2023
-        anos = [ "2025-01-01"]
-
-        for ano_inicio in anos:
-            ano_fim = ano_inicio.replace("-01-01", "-12-31")
-            print(f"    📅 {conta['nome']} - Buscando: {ano_inicio} a {ano_fim}...")
-            
-            params = {"inicio": ano_inicio, "fim": ano_fim, "campo": CAMPOS_LUMI}
-
-            try:
-                resp = requests.get(full_url, headers=headers, params=params, timeout=120)
-                if resp.status_code != 200: continue
-                
-                dados = resp.json()
-                lista = []
-                
-                # Tratamento de retorno da API (às vezes vem dict, às vezes list)
-                if isinstance(dados, list): lista = dados
-                elif isinstance(dados, dict):
-                     lista = dados.get("data", [])
-                     if isinstance(lista, dict) and "rows" in lista: lista = lista["rows"]
-                
-                if not lista: 
-                    # print(f"        (Sem dados neste período)")
-                    continue
-                
-                salvar_em_lotes(lista, conta["nome"])
-
-            except Exception as e: print(f"❌ Erro requisição {conta['nome']}: {e}")
 
 if __name__ == "__main__":
     executar_sync_lumi()

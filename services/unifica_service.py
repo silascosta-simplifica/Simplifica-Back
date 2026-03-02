@@ -36,7 +36,9 @@ def verificar_e_criar_colunas():
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS codigo_pix text;",
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS data_emissao_concessionaria date;",
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS vencimento_concessionaria date;",
-        "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS data_emissao date;"
+        "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS data_emissao date;",
+        # NOVO CAMPO DE SALDO
+        "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS kwh_balance_credits numeric DEFAULT 0;"
     ]
     
     with engine.begin() as conn:
@@ -95,6 +97,7 @@ def processar_item_unifica(item):
         "vencimento_concessionaria": tratar_data(item.get("dealership_bill_due_date")),
         "data_emissao": tratar_data(item.get("issue_date")),
         "link_fatura": item.get("billing_file_key") or item.get("dealership_bill_file_key"),
+        "kwh_balance_credits": limpar_numero(item.get("kWh_balance_credits")), # <--- NOVO CAMPO SENDO LIDO
         "updated_at": datetime.now()
     }
 
@@ -105,13 +108,11 @@ def salvar_em_lotes(lista_itens):
     for x in lista_itens:
         try:
             p = processar_item_unifica(x)
-            # Alteração: Agora ele avisa se o item for barrado na validação
             if p["uc"] and p["mes_referencia"] and len(str(p["mes_referencia"])) == 10:
                 dados_prontos.append(p)
             else:
                 print(f"\n⚠️ Item DESCARTADO (Falta UC ou Data Inválida) -> UC: {p['uc']} | Mês: {p['mes_referencia']}")
         except Exception as e:
-            # Alteração: O 'pass' silencioso foi removido. Agora ele "grita" o erro.
             print(f"\n❌ ERRO ao processar linha: {e} | Dados brutos: {x.get('uc', 'Sem UC')}")
 
     if not dados_prontos: 
@@ -125,13 +126,13 @@ def salvar_em_lotes(lista_itens):
                     uc, mes_referencia, nome_cliente, valor_fatura, remuneracao_geracao, 
                     consumo_kwh, energia_compensada, economia_total, status_pagamento, 
                     vencimento, codigo_barras, codigo_pix, data_emissao_concessionaria, 
-                    vencimento_concessionaria, data_emissao, link_fatura, updated_at
+                    vencimento_concessionaria, data_emissao, link_fatura, kwh_balance_credits, updated_at
                 )
                 VALUES (
                     :uc, :mes, :nome, :val, :remun, 
                     :cons, :comp, :eco, :st, 
                     :venc, :bar, :pix, :emi_conc, 
-                    :venc_conc, :emi, :link, :upd
+                    :venc_conc, :emi, :link, :saldo, :upd
                 )
                 ON CONFLICT (uc, mes_referencia) DO UPDATE SET
                     nome_cliente = EXCLUDED.nome_cliente,
@@ -148,6 +149,7 @@ def salvar_em_lotes(lista_itens):
                     vencimento_concessionaria = EXCLUDED.vencimento_concessionaria,
                     data_emissao = EXCLUDED.data_emissao,
                     link_fatura = EXCLUDED.link_fatura,
+                    kwh_balance_credits = EXCLUDED.kwh_balance_credits,
                     updated_at = EXCLUDED.updated_at;
             """)
             conn.execute(stmt, {
@@ -157,7 +159,9 @@ def salvar_em_lotes(lista_itens):
                 "st": item["status_pagamento"], "venc": item["vencimento"], 
                 "bar": item["codigo_barras"], "pix": item["codigo_pix"], 
                 "emi_conc": item["data_emissao_concessionaria"], "venc_conc": item["vencimento_concessionaria"], 
-                "emi": item["data_emissao"], "link": item["link_fatura"], "upd": item["updated_at"]
+                "emi": item["data_emissao"], "link": item["link_fatura"], 
+                "saldo": item["kwh_balance_credits"], # <--- VARIÁVEL SENDO PASSADA PARA O SQL
+                "upd": item["updated_at"]
             })
     print(f"   ✅ Unifica: Salvo lote de {len(dados_prontos)} registros...", end='\r')
 
@@ -185,7 +189,6 @@ def executar_sync_unifica():
     
     session = get_session()
     
-    # Alteração: Agora ele realmente puxa a página salva no checkpoint
     page = carregar_checkpoint() 
     per_page = 50
     total_baixado = 0
@@ -206,7 +209,6 @@ def executar_sync_unifica():
                 
                 if resp.status_code != 200:
                     print(f"\n❌ Erro API {resp.status_code}. Esperando 10s...")
-                    # Alteração: 401 e 403 são erros de token, então aborta. 404 pode ser fim de página, então sai do loop com break.
                     if resp.status_code in [401, 403]: 
                         print("🛑 Erro de Autenticação/Permissão. Abortando execução.")
                         return
@@ -224,7 +226,6 @@ def executar_sync_unifica():
                 print(f"\n⚠️ Falha conexão: {e}. Tentando novamente em 15s...")
                 time.sleep(15)
         
-        # Se a página deu 404, o bloco abaixo pode falhar ou vir vazio. Tratamos isso:
         if resp.status_code == 404:
             if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
             break
