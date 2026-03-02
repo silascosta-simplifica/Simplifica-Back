@@ -532,7 +532,6 @@ function AdminDashboard() {
 
   const generalMetrics = useMemo(() => {
     const totalUCs = filteredData.length;
-    // Energia Gerida: Soma da energia das faturas reais emitidas + energia estimada pendente
     const totalEnergy = macroMetrics.energiaRealizada + macroMetrics.energiaPendente;
     const totalRevenue = macroMetrics.realizado + macroMetrics.pendente;
     const avgTicket = totalUCs > 0 ? totalRevenue / totalUCs : 0;
@@ -708,13 +707,12 @@ function AdminDashboard() {
     return { data: monthlyData, tarifaMedia };
   }, [data, selectedConcessionaria, selectedArea, selectedEtapa, selectedMesRef]);
 
-  // --- NOVAS MÉTRICAS DE INTELIGÊNCIA DE NEGÓCIO E FUNIL ---
   const biMetrics = useMemo(() => {
     const pfPj = { PF: { count: 0, consumo: 0 }, PJ: { count: 0, consumo: 0 }, Outros: { count: 0, consumo: 0 } };
     const churn: Record<string, { count: number, consumo: number }> = {};
     const ticketGrupo: Record<string, { soma: number, count: number, consumo: number, macro: string }> = {};
     const descontos: Record<string, { sum: number, count: number }> = {};
-    const tarifaMap: Record<string, { sumR$: number, sumKwh: number }> = {}; // NOVO: Tarifa
+    const tarifaMap: Record<string, { sumR$: number, sumKwh: number }> = {}; 
     
     const slaFaturamentoMap: Record<string, { sumDays: number, count: number }> = {};
     let totalSlaDays = 0; let countSla = 0;
@@ -722,16 +720,13 @@ function AdminDashboard() {
 
     const uniqueUcs = Array.from(new Map(filteredData.map((item: any) => [item.uc, item])).values()) as any[];
 
-    // 1. Processamento das UCs únicas (para PF/PJ e Cancelamentos)
     uniqueUcs.forEach((c: any) => {
-        // PF vs PJ
         const nat = c.natureza_cliente === 'PJ' ? 'PJ' : (c.natureza_cliente === 'PF' ? 'PF' : 'Outros');
         if (pfPj[nat as keyof typeof pfPj]) { 
             pfPj[nat as keyof typeof pfPj].count++; 
             pfPj[nat as keyof typeof pfPj].consumo += (c.consumo_mwh ? c.consumo_mwh * 1000 : c.consumo_kwh || 0); 
         }
 
-        // Churn Mensal Inteligente
         const etapaNorm = c.objetivo_etapa_norm || c.objetivo_etapa;
         let isChurnedInPeriod = false;
 
@@ -760,9 +755,7 @@ function AdminDashboard() {
         }
     });
 
-    // 2. Processamento de todas as faturas filtradas (Para Tickets, Descontos, Tarifa e SLA de Faturamento)
     filteredData.forEach((c: any) => {
-        // Descontos Médios
         if (c.concessionaria_norm && c.perc_desconto > 0) {
             const conc = c.concessionaria_norm;
             descontos[conc] = descontos[conc] || { sum: 0, count: 0 };
@@ -772,7 +765,6 @@ function AdminDashboard() {
             countDesconto++;
         }
 
-        // Tarifa Média Real por Distribuidora
         if (c.concessionaria_norm && c.total_fatura > 0 && (c.compensado_kwh > 0 || c.consumo_real_kwh > 0)) {
             const conc = c.concessionaria_norm;
             const kwh = c.compensado_kwh > 0 ? c.compensado_kwh : c.consumo_real_kwh;
@@ -781,7 +773,6 @@ function AdminDashboard() {
             tarifaMap[conc].sumKwh += kwh;
         }
 
-        // Ticket Médio
         if (c.grupo_tarifario && c.grupo_tarifario !== 'N/D' && c.total_fatura > 0) {
             const g = String(c.grupo_tarifario).trim().toUpperCase();
             const macro = g.startsWith('A') ? 'Grupo A' : 'Grupo B';
@@ -791,7 +782,6 @@ function AdminDashboard() {
             ticketGrupo[g].consumo += (c.consumo_kwh || 0); 
         }
 
-        // SLA de Faturamento (Atraso entre Distribuidora e Nosso Boleto)
         if (c.data_emissao_distribuidora && c.data_emissao_norm) {
             const dtDist = parseBrDate(c.data_emissao_distribuidora);
             const dtNossa = parseBrDate(c.data_emissao_norm);
@@ -1417,7 +1407,7 @@ function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Descontos Médios (Tiramos o limite e colocamos scroll interno dinâmico) */}
+                {/* Descontos Médios */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
                     <div className="flex justify-between items-center mb-4 shrink-0" title="Percentual médio de desconto aplicado aos clientes de cada distribuidora">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Receipt size={16} className="text-rose-400"/> Descontos Aplicados</h3>
@@ -1494,22 +1484,24 @@ function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Churn Analítico */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1">
+                {/* Churn Analítico - Agora permite crescimento vertical e scroll para alinhar com os gráficos vizinhos */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
                     <div className="flex justify-between items-center mb-4 shrink-0">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2" title={biMetrics.churnTitle}><ShieldAlert size={16} className="text-orange-500"/> {biMetrics.churnTitle}</h3>
                         <span className="text-xs bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="% de Cancelados (Neste mês filtrado ou Total Histórico) em relação ao total">Churn: {biMetrics.churnRate}%</span>
                     </div>
-                    <div className="flex-1 flex flex-col justify-start space-y-4 pr-2 overflow-y-auto max-h-48 scrollbar-thin scrollbar-thumb-slate-700">
-                        {biMetrics.churnData.length > 0 ? biMetrics.churnData.map((c, i) => (
-                            <div key={i} className="flex justify-between items-center text-xs border-b border-slate-800/50 pb-3 last:border-0 last:pb-0">
-                                <span className="text-slate-400 truncate pr-2 flex-1 font-medium" title={c.name}>{c.name}</span>
-                                <div className="flex flex-col items-end min-w-max">
-                                    <span className="font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded shadow-sm">{c.value} UCs</span>
-                                    <span className="text-[10px] text-slate-500 mt-1 font-mono">{formatEnergySmart(c.consumo, 'kWh')}</span>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
+                        <div className="flex flex-col justify-start space-y-3">
+                            {biMetrics.churnData.length > 0 ? biMetrics.churnData.map((c, i) => (
+                                <div key={i} className="flex justify-between items-center text-xs border-b border-slate-800/50 pb-3 last:border-0 last:pb-0">
+                                    <span className="text-slate-400 truncate pr-2 flex-1 font-medium" title={c.name}>{c.name}</span>
+                                    <div className="flex flex-col items-end min-w-max">
+                                        <span className="font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded shadow-sm">{c.value} UCs</span>
+                                        <span className="text-[10px] text-slate-500 mt-1 font-mono">{formatEnergySmart(c.consumo, 'kWh')}</span>
+                                    </div>
                                 </div>
-                            </div>
-                        )) : <p className="text-xs text-slate-500 text-center py-4">Nenhum cancelamento na data ou filtros selecionados.</p>}
+                            )) : <p className="text-xs text-slate-500 text-center py-4">Nenhum cancelamento na data ou filtros selecionados.</p>}
+                        </div>
                     </div>
                 </div>
               </div>
