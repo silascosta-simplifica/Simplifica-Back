@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { useAnalytics } from '../hooks/useAnalytics';
@@ -136,7 +136,6 @@ export default function PortalCamila() {
     const [filtroCiclo, setFiltroCiclo] = useState<string[]>([]); 
     const [filtroEtapa, setFiltroEtapa] = useState<string[]>([]); 
     
-    // Modificado para Saldo (kWh)
     const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Mês Referência', 'Ciclo', '1ª Economia', 'Economia (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Etapa', 'Motivo Cancelamento'];
     const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Mês Referência', 'Ciclo', '1ª Economia', 'Status Pagamento', 'Eficiência (%)', 'Saldo (kWh)']);
 
@@ -198,59 +197,6 @@ export default function PortalCamila() {
             window.open(data.url, '_blank');
         } catch (err: any) {
             alert(`Falha ao buscar ${type}: ${err.message}`);
-        } finally {
-            setBtnLoading(buttonId, false);
-        }
-    };
-
-    const handleDownloadLumiBoleto = async (uc: string, mesRef: string, buttonId: string) => {
-        if (!uc || !mesRef || mesRef === '-' || mesRef === 'N/D') return;
-        setBtnLoading(buttonId, true);
-        try {
-            const email = import.meta.env.VITE_LUMI_EMAIL;
-            const senha = import.meta.env.VITE_LUMI_SENHA;
-            
-            if (!email || !senha) {
-                throw new Error("Credenciais da API Lumi não configuradas no .env");
-            }
-
-            const resLogin = await fetch('https://api.labs-lumi.com.br/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, senha })
-            });
-            const loginData = await resLogin.json();
-            if (loginData.status !== 'sucesso') throw new Error("Falha de autenticação na Lumi.");
-            const token = loginData.token;
-
-            const parts = mesRef.split('/');
-            const driveId = `${uc}-${parts[0]}-${parts[1]}`;
-
-            const resBoleto = await fetch('https://api.labs-lumi.com.br/pagamentos/preview-cobranca/location', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ drive_id: driveId })
-            });
-            const boletoData = await resBoleto.json();
-            
-            if (boletoData.status !== 'successo' || !boletoData.data?.toRender?.data) {
-                throw new Error("A Lumi não gerou o buffer do boleto para esta referência.");
-            }
-
-            const byteArray = new Uint8Array(boletoData.data.toRender.data);
-            const blob = new Blob([byteArray], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Boleto_Simplifica_${uc}_${parts[0]}_${parts[1]}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-        } catch (err: any) {
-            alert(`Falha ao gerar Boleto Lumi: ${err.message}`);
         } finally {
             setBtnLoading(buttonId, false);
         }
