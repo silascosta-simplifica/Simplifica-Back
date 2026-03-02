@@ -642,19 +642,34 @@ export default function PortalParceiro() {
                 <style>
                     {`
                         @media print {
-                            @page { size: A4 portrait; margin: 10mm; }
+                            @page { 
+                                size: A4 portrait; 
+                                margin: 10mm; 
+                            }
+                            
                             html, body, #root {
-                                background-color: #0a0a0a !important;
+                                background-color: #0f172a !important; 
                                 color: white !important;
                                 -webkit-print-color-adjust: exact !important;
                                 print-color-adjust: exact !important;
-                                height: 100% !important;
+                                height: auto !important;
+                                min-height: 100% !important;
+                                display: block !important;
                                 margin: 0 !important;
                                 padding: 0 !important;
                             }
-                            .bg-slate-900 { background-color: #111827 !important; }
-                            .bg-slate-950 { background-color: #0a0a0a !important; }
-                            .page-break-inside-avoid {
+                            
+                            #relatorio-print-container {
+                                margin-top: 15mm !important;
+                            }
+                            
+                            .recharts-responsive-container {
+                                width: 100% !important;
+                                height: 220px !important; 
+                                margin-bottom: 80px !important; 
+                            }
+                            
+                            .print-break-avoid {
                                 page-break-inside: avoid !important;
                                 break-inside: avoid !important;
                             }
@@ -690,6 +705,7 @@ export default function PortalParceiro() {
 
             <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto print:p-0 print:m-0 print:block">
                 
+                {/* ABA 1: CARTEIRA */}
                 {activeTab === 'carteira' && (
                     <div className="print:hidden space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 animate-in fade-in zoom-in duration-300">
@@ -1027,7 +1043,7 @@ export default function PortalParceiro() {
 
                 {/* --- ABA: RELATÓRIO DO CLIENTE (PRINT-FRIENDLY A4) --- */}
                 {activeTab === 'relatorio' && (
-                    <div className="flex flex-col gap-6 w-full mx-auto print:max-w-[210mm] print:m-0 page-break-inside-avoid">
+                    <div id="relatorio-print-container" className="flex flex-col gap-6 w-full mx-auto print:max-w-[210mm] page-break-inside-avoid">
                         {/* CONTROLES DE IMPRESSÃO - SOMEM AO IMPRIMIR */}
                         <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden flex flex-col sm:flex-row gap-4 justify-between items-center z-20 max-w-[900px] w-full mx-auto">
                             <div className="flex flex-col gap-1 w-full sm:w-[400px]">
@@ -1079,10 +1095,10 @@ export default function PortalParceiro() {
 
                         {/* O RELATÓRIO EM SI */}
                         {relatorioData ? (
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-0 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full page-break-inside-avoid">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-2 w-full max-w-[900px] mx-auto print:w-full print:max-w-full print:text-white print:bg-slate-900">
                                 
                                 {/* HEADER RELATÓRIO */}
-                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-3 mb-6 print:mb-5">
+                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-2 mb-6 print:mb-3 print-break-avoid">
                                     <div>
                                         <h1 className="text-3xl print:text-2xl font-display font-bold text-white mb-1">{relatorioData.infoCadastral.nome_cliente}</h1>
                                         <p className="text-slate-400 font-mono text-sm print:text-xs">UC: {relatorioData.infoCadastral.uc}</p>
@@ -1095,7 +1111,7 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* INFO CADASTRAL E STATUS */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-3 mb-8 print:mb-6">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-2 mb-8 print:mb-3 print-break-avoid">
                                     <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Concessionária</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">{relatorioData.infoCadastral.concessionaria}</p>
@@ -1119,8 +1135,8 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* GRANDES NÚMEROS DE ECONOMIA E COMPENSAÇÃO */}
-                                <div className="flex flex-col sm:flex-row gap-6 print:gap-4 mb-8 print:mb-6 page-break-inside-avoid">
-                                    <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
+                                <div className="flex flex-col sm:flex-row gap-6 print:gap-4 mb-8 print:mb-3 print-break-avoid">
+                                    <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <PiggyBank size={32} className="text-emerald-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
                                         <p className="text-xs print:text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Economia Total Acumulada</p>
                                         <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{formatMoney(relatorioData.totalEco)}</h2>
@@ -1131,7 +1147,7 @@ export default function PortalParceiro() {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex-1 bg-blue-900/10 border border-blue-800/30 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
+                                    <div className="flex-1 bg-blue-900/10 border border-blue-800/30 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <Zap size={32} className="text-blue-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
                                         <p className="text-xs print:text-[11px] font-bold text-blue-500 uppercase tracking-widest mb-1">Total de Energia Compensada</p>
                                         <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{Math.round(relatorioData.totalComp).toLocaleString('pt-BR')} <span className="text-lg print:text-base text-blue-400">kWh</span></h2>
@@ -1139,7 +1155,7 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* MÉTRICAS FINANCEIRAS COMPARATIVAS */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-3 mb-8 print:mb-8 page-break-inside-avoid">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-2 mb-10 print:mb-6 print-break-avoid">
                                     <div className="bg-slate-900 p-4 print:p-3 border border-slate-700 rounded-xl flex justify-between items-center">
                                         <div className="flex items-center gap-3 print:gap-2">
                                             <div className="bg-rose-500/10 p-2 print:p-1.5 rounded-full"><TrendingUp size={18} className="text-rose-400 print:h-5 print:w-5"/></div>
@@ -1157,11 +1173,11 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* GRÁFICO (ÚNICO E ALARGADO) */}
-                                <div className="mb-8 print:mb-10 page-break-inside-avoid">
-                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-4 print:mb-4 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (Últimos 12 meses)</h3>
-                                    <div className="w-full h-[300px] print:h-[280px]">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }} barGap={2}>
+                                <div className="mb-10 print:mb-30 print-break-avoid relative z-0">
+                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-6 print:mb-2 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (Últimos 12 meses)</h3>
+                                    <div className="w-full h-[300px] print:h-[220px] print:pr-4 relative">
+                                        <ResponsiveContainer width="99%" height="100%">
+                                            <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 30, left: -10, bottom: 5 }} barGap={2}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                                 <XAxis dataKey="mes" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickMargin={10}/>
                                                 <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false}/>
@@ -1173,18 +1189,18 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* EXTRATO FINAL DAS ÚLTIMAS FATURAS */}
-                                <div className="page-break-inside-avoid pt-4 print:pt-6">
+                                <div className="print-break-avoid pt-4 print:pt-[42px] relative z-10">
                                     <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-4 print:mb-3 border-b border-slate-800 pb-2">Extrato das Últimas Faturas</h3>
                                     <table className="w-full text-sm print:text-xs text-left">
                                         <thead className="text-xs print:text-[10px] uppercase text-slate-500 border-b border-slate-800">
                                             <tr>
-                                                <th className="py-2 print:py-1.5">Mês Ref.</th>
-                                                <th className="py-2 print:py-1.5">Vencimento</th>
-                                                <th className="py-2 print:py-1.5 text-right">Consumo</th>
-                                                <th className="py-2 print:py-1.5 text-right">Compensação</th>
-                                                <th className="py-2 print:py-1.5 text-center">Eficiência</th>
-                                                <th className="py-2 print:py-1.5 text-right">Boleto (R$)</th>
-                                                <th className="py-2 print:py-1.5 text-right">Economia</th>
+                                                <th className="py-2 print:py-2">Mês Ref.</th>
+                                                <th className="py-2 print:py-2">Vencimento</th>
+                                                <th className="py-2 print:py-2 text-right">Consumo</th>
+                                                <th className="py-2 print:py-2 text-right">Compensação</th>
+                                                <th className="py-2 print:py-2 text-center">Eficiência</th>
+                                                <th className="py-2 print:py-2 text-right">Boleto (R$)</th>
+                                                <th className="py-2 print:py-2 text-right">Economia</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800/50">
@@ -1192,13 +1208,13 @@ export default function PortalParceiro() {
                                                 const eficPercent = row.eficiencia_compensacao * 100;
                                                 return (
                                                     <tr key={i} className="text-slate-300">
-                                                        <td className="py-2 print:py-2 font-mono text-xs">{formatMesRef(row.mes_referencia)}</td>
-                                                        <td className="py-2 print:py-2 text-xs">{toDateBR(row.vencimento)}</td>
-                                                        <td className="py-2 print:py-2 text-right text-xs">{Math.round(row.consumo_kwh).toLocaleString('pt-BR')} kWh</td>
-                                                        <td className="py-2 print:py-2 text-right text-xs">{Math.round(row.compensacao_kwh).toLocaleString('pt-BR')} kWh</td>
-                                                        <td className="py-2 print:py-2 text-center text-xs">{row.eficiencia_compensacao > 0 ? eficPercent.toFixed(1) + '%' : '-'}</td>
-                                                        <td className="py-2 print:py-2 text-right text-xs">{formatMoney(row.boleto_simplifica)}</td>
-                                                        <td className="py-2 print:py-2 text-right font-bold text-emerald-400 text-xs">{formatMoney(row.economia_rs)}</td>
+                                                        <td className="py-3 print:py-2.5 font-mono text-xs">{formatMesRef(row.mes_referencia)}</td>
+                                                        <td className="py-3 print:py-2.5 text-xs">{toDateBR(row.vencimento)}</td>
+                                                        <td className="py-3 print:py-2.5 text-right text-xs">{Math.round(row.consumo_kwh).toLocaleString('pt-BR')} kWh</td>
+                                                        <td className="py-3 print:py-2.5 text-right text-xs">{Math.round(row.compensacao_kwh).toLocaleString('pt-BR')} kWh</td>
+                                                        <td className="py-3 print:py-2.5 text-center text-xs">{row.eficiencia_compensacao > 0 ? eficPercent.toFixed(1) + '%' : '-'}</td>
+                                                        <td className="py-3 print:py-2.5 text-right text-xs">{formatMoney(row.boleto_simplifica)}</td>
+                                                        <td className="py-3 print:py-2.5 text-right font-bold text-emerald-400 text-xs">{formatMoney(row.economia_rs)}</td>
                                                     </tr>
                                                 )
                                             })}
@@ -1217,6 +1233,7 @@ export default function PortalParceiro() {
                     </div>
                 )}
 
+                {/* ABA 3: GESTÃO DE SENHAS */}
                 {isAdmin && activeTab === 'gestao' && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in zoom-in duration-300 print:hidden">
                         <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden flex flex-col">

@@ -65,7 +65,7 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
                 </div>
                 <h3 className="text-2xl font-display font-bold text-white mb-2">Sem dados geográficos</h3>
                 <p className="text-slate-400 mb-4 max-w-md">
-                   Nenhum cliente na lista atual possui coordenadas cadastradas no banco de dados.
+                    Nenhum cliente na lista atual possui coordenadas cadastradas no banco de dados.
                 </p>
             </div>
         );
@@ -233,21 +233,21 @@ const FinancialTable = ({ title, data, colorClass, totalValue, totalCompensated,
         </div>
       </div>
     )}
-    <div className="overflow-auto flex-1 h-[300px] relative"> 
-      {!showHeader && <div className={`sticky top-0 p-2 text-xs font-bold font-display uppercase tracking-wider text-center ${colorClass.split(' ')[0]} bg-slate-950/80 backdrop-blur-sm z-10 border-b border-slate-800`}>{title}</div>}
+    <div className="overflow-auto flex-1 h-[300px] relative scrollbar-thin scrollbar-thumb-slate-700"> 
+      {!showHeader && <div className={`sticky top-0 p-2 text-xs font-bold font-display uppercase tracking-wider text-center ${colorClass.split(' ')[0]} bg-slate-950/90 backdrop-blur-sm z-10 border-b border-slate-800`}>{title}</div>}
       <table className="w-full text-sm text-left text-slate-400">
-        <thead className="text-xs text-slate-200 uppercase bg-slate-900/50 sticky top-0 z-0">
+        <thead className="text-xs text-slate-200 uppercase bg-slate-900/50 sticky top-[33px] z-0 shadow-sm">
           <tr><th className="px-4 py-3 font-semibold">UC</th><th className="px-4 py-3 font-semibold">Cliente</th><th className="px-4 py-3 text-right font-semibold">Valor R$</th></tr>
         </thead>
-        <tbody className="divide-y divide-slate-700">
+        <tbody className="divide-y divide-slate-700/50">
           {data.map((row: any, idx: number) => (
             <tr key={idx} className="hover:bg-slate-700/50 transition-colors">
               <td className="px-4 py-2 font-mono text-xs text-slate-300">{row.uc}</td>
-              <td className="px-4 py-2 truncate max-w-[150px] text-slate-200" title={row.nome}>{row.nome}</td>
+              <td className="px-4 py-2 truncate max-w-[120px] text-slate-200" title={row.nome}>{row.nome}</td>
               <td className="px-4 py-2 text-right text-white font-medium">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(row.total_fatura)}</td>
             </tr>
           ))}
-          {data.length === 0 && (<tr><td colSpan={3} className="text-center py-10 text-slate-500">Nenhum registro encontrado.</td></tr>)}
+          {data.length === 0 && (<tr><td colSpan={3} className="text-center py-10 text-slate-500">Nenhum registro.</td></tr>)}
         </tbody>
       </table>
     </div>
@@ -436,7 +436,6 @@ function AdminDashboard() {
     } catch { return '-'; }
   };
 
-  // --- NOVA REGRA PARA O STATUS DE EMISSÃO ---
   const getStatusColor = (prevista: string | null, real: string | null, valorRealizado: number) => {
     if (real || valorRealizado > 0) return { color: 'text-emerald-400', bg: 'bg-emerald-900/30 border border-emerald-800', text: 'Emitido', value: 'Emitido' };
     if (!prevista) return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'No Prazo', value: 'No Prazo' };
@@ -692,7 +691,6 @@ function AdminDashboard() {
         let consKwh = 0; let compKwh = 0; let val = 0;
 
         items.forEach(item => {
-            // Regra forte: se tem emissão real de fatura, puxar o consumo real e ignorar o da RD no gráfico.
             if (item.consumo_real_kwh && item.consumo_real_kwh > 0) {
                 consKwh += item.consumo_real_kwh;
             } else {
@@ -716,6 +714,7 @@ function AdminDashboard() {
     const churn: Record<string, { count: number, consumo: number }> = {};
     const ticketGrupo: Record<string, { soma: number, count: number, consumo: number, macro: string }> = {};
     const descontos: Record<string, { sum: number, count: number }> = {};
+    const tarifaMap: Record<string, { sumR$: number, sumKwh: number }> = {}; // NOVO: Tarifa
     
     const slaFaturamentoMap: Record<string, { sumDays: number, count: number }> = {};
     let totalSlaDays = 0; let countSla = 0;
@@ -737,7 +736,6 @@ function AdminDashboard() {
         let isChurnedInPeriod = false;
 
         if (selectedMesRef !== 'Todos') {
-             // Se houver mês filtrado, só conta quem de fato foi cancelado naquele exato mês
              if (c.data_cancelamento) {
                  const dt = parseBrDate(c.data_cancelamento);
                  if (dt) {
@@ -749,7 +747,6 @@ function AdminDashboard() {
                  }
              }
         } else {
-             // Visão Histórica (Todos): Considera o status global atual
              if (etapaNorm === 'Em Exclusão' || etapaNorm === 'Excluído' || etapaNorm === 'Cancelado') {
                  isChurnedInPeriod = true;
              }
@@ -763,7 +760,7 @@ function AdminDashboard() {
         }
     });
 
-    // 2. Processamento de todas as faturas filtradas (Para Tickets, Descontos e SLA de Faturamento)
+    // 2. Processamento de todas as faturas filtradas (Para Tickets, Descontos, Tarifa e SLA de Faturamento)
     filteredData.forEach((c: any) => {
         // Descontos Médios
         if (c.concessionaria_norm && c.perc_desconto > 0) {
@@ -773,6 +770,15 @@ function AdminDashboard() {
             descontos[conc].count++;
             totalDesconto += c.perc_desconto;
             countDesconto++;
+        }
+
+        // Tarifa Média Real por Distribuidora
+        if (c.concessionaria_norm && c.total_fatura > 0 && (c.compensado_kwh > 0 || c.consumo_real_kwh > 0)) {
+            const conc = c.concessionaria_norm;
+            const kwh = c.compensado_kwh > 0 ? c.compensado_kwh : c.consumo_real_kwh;
+            tarifaMap[conc] = tarifaMap[conc] || { sumR$: 0, sumKwh: 0 };
+            tarifaMap[conc].sumR$ += c.total_fatura;
+            tarifaMap[conc].sumKwh += kwh;
         }
 
         // Ticket Médio
@@ -791,7 +797,6 @@ function AdminDashboard() {
             const dtNossa = parseBrDate(c.data_emissao_norm);
             if (dtDist && dtNossa) {
                 const diff = differenceInDays(dtNossa, dtDist);
-                // Filtro de segurança para ignorar anomalias de banco de dados
                 if (diff >= -5 && diff <= 60) {
                     const conc = c.concessionaria_norm || 'Outra';
                     slaFaturamentoMap[conc] = slaFaturamentoMap[conc] || { sumDays: 0, count: 0 };
@@ -812,12 +817,17 @@ function AdminDashboard() {
     const slaDist = Object.keys(slaFaturamentoMap).map(k => ({
         name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'),
         dias: Math.round(slaFaturamentoMap[k].sumDays / slaFaturamentoMap[k].count)
-    })).sort((a,b) => b.dias - a.dias).slice(0, 6);
+    })).sort((a,b) => b.dias - a.dias);
+
+    const tarifaDist = Object.keys(tarifaMap).map(k => ({
+        name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'),
+        tarifa: Number((tarifaMap[k].sumR$ / tarifaMap[k].sumKwh).toFixed(3))
+    })).sort((a,b) => b.tarifa - a.tarifa);
 
     return {
         pfPjData: [
             { name: 'Pessoa Jurídica', ucs: pfPj.PJ.count, consumo: pfPj.PJ.consumo, cor: '#10b981' }, 
-            { name: 'Pessoa Física', ucs: pfPj.PF.count, consumo: pfPj.PF.consumo, cor: '#3b82f6' }    
+            { name: 'Pessoa Física', ucs: pfPj.PF.count, consumo: pfPj.PF.consumo, cor: '#3b82f6' }   
         ].filter(d => d.ucs > 0),
         churnData: Object.keys(churn).map(k => ({ name: k, value: churn[k].count, consumo: churn[k].consumo })).sort((a,b) => b.value - a.value).slice(0, 7),
         churnRate,
@@ -833,7 +843,8 @@ function AdminDashboard() {
         descontoDist: Object.keys(descontos).map(k => ({
              name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'), 
              desconto: Number((descontos[k].sum / descontos[k].count).toFixed(1))
-        })).sort((a,b) => b.desconto - a.desconto).slice(0, 6),
+        })).sort((a,b) => b.desconto - a.desconto),
+        tarifaDist,
         slaGeral,
         slaDist
     };
@@ -864,11 +875,9 @@ function AdminDashboard() {
             stages[key].kwh += (c.consumo_mwh ? c.consumo_mwh * 1000 : c.consumo_kwh || 0); 
         });
 
-        // Ocultar a caixa "Sem Etapa" caso ela esteja zerada
         return Object.keys(stages).map(k => ({ name: k, ...stages[k] })).filter(step => step.name !== 'Sem Etapa' || step.ucs > 0);
   }, [filteredData]);
 
-  // BASE IMUTÁVEL PARA A ABA DE EMISSÃO (Ignora filtros de tabela)
   const emissaoBaseData = useMemo(() => {
       if (selectedMesRef === 'Todos') return [];
       return filteredData;
@@ -892,7 +901,6 @@ function AdminDashboard() {
       return { expectativa, coletadas, emitidos, faltam: expectativa - emitidos, atrasados, noPrazo };
   }, [emissaoBaseData]);
 
-  // CORREÇÃO DA EMISSAO METRICS: Faltava este bloco na versão anterior
   const emissaoMetrics = useMemo(() => {
     const itensRealizados = emissaoBaseData.filter(d => {
         const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
@@ -1097,7 +1105,7 @@ function AdminDashboard() {
       naoEnviado: { 
          list: naoEnviadoList, 
          val: sum(naoEnviadoList), 
-         energy: naoEnviadoList.reduce((acc, curr) => acc + (curr.consumo_mwh || 0), 0) 
+         energy: naoEnviadoList.reduce((acc, curr) => acc + ((curr.consumo_mwh || 0) * 1000), 0) / 1000 
       },
     };
   }, [filteredData]);
@@ -1382,11 +1390,11 @@ function AdminDashboard() {
                   </div>
               </div>
 
-              {/* LINHA DE INTELIGÊNCIA COMERCIAL (BI) COM 4 COLUNAS */}
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+              {/* LINHA DE INTELIGÊNCIA COMERCIAL (BI) COM 5 COLUNAS */}
+              <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 mb-6">
                 
                 {/* Ticket Médio */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:col-span-1">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1">
                     <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2" title="Média de valor faturado separado por tensão (Alta/Baixa)"><DollarSign size={16} className="text-indigo-400"/> Ticket Médio (Tensão)</h3>
                     <div className="flex-1 min-h-[200px]">
                         <ResponsiveContainer width="100%" height="100%">
@@ -1409,49 +1417,75 @@ function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Descontos Médios */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:col-span-1">
-                    <div className="flex justify-between items-center mb-4" title="Percentual médio de desconto aplicado aos clientes de cada distribuidora">
+                {/* Descontos Médios (Tiramos o limite e colocamos scroll interno dinâmico) */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
+                    <div className="flex justify-between items-center mb-4 shrink-0" title="Percentual médio de desconto aplicado aos clientes de cada distribuidora">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Receipt size={16} className="text-rose-400"/> Descontos Aplicados</h3>
-                        <span className="text-xs bg-slate-950 border border-slate-700 px-2 py-1 rounded-lg font-bold text-rose-400">Média Geral: {biMetrics.descontoGeral}%</span>
+                        <span className="text-xs bg-slate-950 border border-slate-700 px-2 py-1 rounded-lg font-bold text-rose-400">Média: {biMetrics.descontoGeral}%</span>
                     </div>
-                    <div className="flex-1 min-h-[200px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={biMetrics.descontoDist} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-                                <XAxis type="number" stroke="#94a3b8" fontSize={10} hide />
-                                <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} width={80} axisLine={false} tickLine={false} />
-                                <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `${val}%`} />
-                                <Bar dataKey="desconto" fill="#f43f5e" radius={[0, 4, 4, 0]} barSize={16}>
-                                    <LabelList dataKey="desconto" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `${v}%`}/>
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* NOVO: SLA DE FATURAMENTO */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col relative overflow-hidden lg:col-span-1">
-                    <div className="absolute top-0 right-0 p-5 opacity-5"><Clock size={100} className="text-blue-500"/></div>
-                    <div className="flex justify-between items-center mb-4 relative z-10" title="Delay (em dias) entre a Fatura da Distribuidora e a Emissão do seu Boleto">
-                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                            <Clock size={16} className="text-blue-400"/> Atraso no Faturamento
-                        </h3>
-                        <span className="text-xs bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded-lg font-bold text-blue-400">Média: {biMetrics.slaGeral} dias</span>
-                    </div>
-                    <div className="flex-1 min-h-[200px] relative z-10">
-                        {biMetrics.slaDist.length > 0 ? (
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
+                        <div style={{ height: Math.max(200, biMetrics.descontoDist.length * 35) }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={biMetrics.slaDist} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                                <BarChart data={biMetrics.descontoDist} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
                                     <XAxis type="number" stroke="#94a3b8" fontSize={10} hide />
                                     <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} width={80} axisLine={false} tickLine={false} />
-                                    <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `${val} dias`} />
-                                    <Bar dataKey="dias" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={16}>
-                                        <LabelList dataKey="dias" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `${v}d`}/>
+                                    <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `${val}%`} />
+                                    <Bar dataKey="desconto" fill="#f43f5e" radius={[0, 4, 4, 0]} barSize={16}>
+                                        <LabelList dataKey="desconto" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `${v}%`}/>
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                {/* TARIFA MÉDIA */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
+                    <div className="flex justify-between items-center mb-4 shrink-0" title="Tarifa Média Aplicada (R$ / kWh) por Distribuidora nos faturamentos reais">
+                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><DollarSign size={16} className="text-emerald-400"/> Tarifa Média (R$)</h3>
+                    </div>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
+                        <div style={{ height: Math.max(200, biMetrics.tarifaDist.length * 35) }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={biMetrics.tarifaDist} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                                    <XAxis type="number" stroke="#94a3b8" fontSize={10} hide />
+                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} width={80} axisLine={false} tickLine={false} />
+                                    <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `R$ ${val}`} />
+                                    <Bar dataKey="tarifa" fill="#10b981" radius={[0, 4, 4, 0]} barSize={16}>
+                                        <LabelList dataKey="tarifa" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `R$ ${v.toFixed(2)}`}/>
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                {/* SLA DE FATURAMENTO */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col relative overflow-hidden xl:col-span-1">
+                    <div className="absolute top-0 right-0 p-5 opacity-5 pointer-events-none"><Clock size={100} className="text-blue-500"/></div>
+                    <div className="flex justify-between items-center mb-4 relative z-10 shrink-0" title="Delay (em dias) entre a Fatura da Distribuidora e a Emissão do seu Boleto">
+                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                            <Clock size={16} className="text-blue-400"/> Atraso (Faturamento)
+                        </h3>
+                        <span className="text-xs bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded-lg font-bold text-blue-400">Média: {biMetrics.slaGeral}d</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px] relative z-10">
+                        {biMetrics.slaDist.length > 0 ? (
+                            <div style={{ height: Math.max(200, biMetrics.slaDist.length * 35) }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={biMetrics.slaDist} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                                        <XAxis type="number" stroke="#94a3b8" fontSize={10} hide />
+                                        <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} width={80} axisLine={false} tickLine={false} />
+                                        <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `${val} dias`} />
+                                        <Bar dataKey="dias" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={16}>
+                                            <LabelList dataKey="dias" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `${v}d`}/>
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         ) : (
                             <div className="h-full flex items-center justify-center text-slate-500 text-xs text-center p-4">
                                 Sem dados de emissão da distribuidora no banco para calcular o delay.
@@ -1461,10 +1495,10 @@ function AdminDashboard() {
                 </div>
 
                 {/* Churn Analítico */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:col-span-1">
-                    <div className="flex justify-between items-center mb-4">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1">
+                    <div className="flex justify-between items-center mb-4 shrink-0">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2" title={biMetrics.churnTitle}><ShieldAlert size={16} className="text-orange-500"/> {biMetrics.churnTitle}</h3>
-                        <span className="text-xs bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="% de Cancelados (Neste mês filtrado ou Total Histórico) em relação ao total">Churn Rate: {biMetrics.churnRate}%</span>
+                        <span className="text-xs bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="% de Cancelados (Neste mês filtrado ou Total Histórico) em relação ao total">Churn: {biMetrics.churnRate}%</span>
                     </div>
                     <div className="flex-1 flex flex-col justify-start space-y-4 pr-2 overflow-y-auto max-h-48 scrollbar-thin scrollbar-thumb-slate-700">
                         {biMetrics.churnData.length > 0 ? biMetrics.churnData.map((c, i) => (
@@ -1556,30 +1590,38 @@ function AdminDashboard() {
                  <h3 className="text-sm font-bold font-display text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><Wallet size={16}/> Detalhamento de Recebimentos</h3>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     {[
+                        { label: 'Não Enviado', data: financialGroups.naoEnviado, color: 'text-slate-400', icon: Clock, iconColor: 'text-slate-500', bg: 'bg-slate-800', border: 'border-slate-700' },
+                        { label: 'A Receber', data: financialGroups.enviado, color: 'text-blue-400', icon: Send, iconColor: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
                         { label: 'Recebido', data: financialGroups.recebido, color: 'text-emerald-400', icon: CheckCircle2, iconColor: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
-                        { label: 'Atrasado', data: financialGroups.atrasado, color: 'text-rose-400', icon: AlertCircle, iconColor: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
-                        { label: 'Enviado', data: financialGroups.enviado, color: 'text-blue-400', icon: Send, iconColor: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-                        { label: 'Não Enviado', data: financialGroups.naoEnviado, color: 'text-slate-400', icon: Clock, iconColor: 'text-slate-500', bg: 'bg-slate-800', border: 'border-slate-700' }
-                    ].map((item, idx) => (
-                        <div key={idx} className={`p-5 rounded-2xl border flex justify-between items-center group hover:scale-[1.02] transition-all shadow-sm ${item.bg} ${item.border}`}>
-                        <div>
-                            <p className="text-xs text-slate-400 mb-1 font-bold font-display uppercase tracking-wider">{item.label}</p>
-                            <p className={`text-xl font-display font-bold ${item.color}`}>{formatMoney(item.data.val)}</p>
-                            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Zap size={10}/> {formatEnergySmart(item.data.energy, 'MWh')}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                            <item.icon className={`${item.iconColor} opacity-80`} size={28} />
-                            <button onClick={() => downloadCSV(item.data.list, `relatorio_${item.label.toLowerCase()}`)} className="opacity-0 group-hover:opacity-100 transition-opacity text-xs flex items-center gap-1 text-slate-300 hover:text-white bg-slate-900/80 px-2.5 py-1 rounded-md font-medium"><Download size={12}/> CSV</button>
-                        </div>
-                        </div>
-                    ))}
+                        { label: 'Atrasado', data: financialGroups.atrasado, color: 'text-rose-400', icon: AlertCircle, iconColor: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/20' }
+                    ].map((item, idx) => {
+                        const totalFinanceEnergy = financialGroups.recebido.energy + financialGroups.atrasado.energy + financialGroups.enviado.energy + financialGroups.naoEnviado.energy;
+                        const pct = totalFinanceEnergy > 0 ? ((item.data.energy / totalFinanceEnergy) * 100).toFixed(1) : 0;
+                        
+                        return (
+                            <div key={idx} className={`p-5 rounded-2xl border flex justify-between items-center group hover:scale-[1.02] transition-all shadow-sm ${item.bg} ${item.border}`}>
+                                <div>
+                                    <p className="text-xs text-slate-400 mb-1 font-bold font-display uppercase tracking-wider">{item.label}</p>
+                                    <p className={`text-xl font-display font-bold ${item.color}`}>{formatMoney(item.data.val)}</p>
+                                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                                        <Zap size={10}/> {formatEnergySmart(item.data.energy, 'MWh')} 
+                                        <span className="opacity-70 font-medium ml-1 text-[10px]">({pct}%)</span>
+                                    </p>
+                                </div>
+                                <div className="flex flex-col items-end gap-2">
+                                    <item.icon className={`${item.iconColor} opacity-80`} size={28} />
+                                    <button onClick={() => downloadCSV(item.data.list, `relatorio_${item.label.toLowerCase().replace(' ', '_')}`)} className="opacity-0 group-hover:opacity-100 transition-opacity text-xs flex items-center gap-1 text-slate-300 hover:text-white bg-slate-900/80 px-2.5 py-1 rounded-md font-medium"><Download size={12}/> CSV</button>
+                                </div>
+                            </div>
+                        )
+                    })}
                  </div>
 
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[600px]">
+                    <FinancialTable title="Não Enviado" data={financialGroups.naoEnviado.list} colorClass="text-slate-400 border-slate-700 bg-slate-800/50" totalValue={formatMoney(financialGroups.naoEnviado.val)} totalCompensated={formatEnergySmart(financialGroups.naoEnviado.energy, 'MWh')} showHeader={false} />
+                    <FinancialTable title="A Receber" data={financialGroups.enviado.list} colorClass="text-blue-400 border-blue-900 bg-blue-900/20" totalValue={formatMoney(financialGroups.enviado.val)} totalCompensated={formatEnergySmart(financialGroups.enviado.energy, 'MWh')} showHeader={false} />
                     <FinancialTable title="Recebido" data={financialGroups.recebido.list} colorClass="text-emerald-400 border-emerald-900 bg-emerald-900/20" totalValue={formatMoney(financialGroups.recebido.val)} totalCompensated={formatEnergySmart(financialGroups.recebido.energy, 'MWh')} showHeader={false} />
                     <FinancialTable title="Atrasado" data={financialGroups.atrasado.list} colorClass="text-rose-400 border-rose-900 bg-rose-900/20" totalValue={formatMoney(financialGroups.atrasado.val)} totalCompensated={formatEnergySmart(financialGroups.atrasado.energy, 'MWh')} showHeader={false} />
-                    <FinancialTable title="Enviado" data={financialGroups.enviado.list} colorClass="text-blue-400 border-blue-900 bg-blue-900/20" totalValue={formatMoney(financialGroups.enviado.val)} totalCompensated={formatEnergySmart(financialGroups.enviado.energy, 'MWh')} showHeader={false} />
-                    <FinancialTable title="Não Enviado" data={financialGroups.naoEnviado.list} colorClass="text-slate-400 border-slate-700 bg-slate-800/50" totalValue={formatMoney(financialGroups.naoEnviado.val)} totalCompensated={formatEnergySmart(financialGroups.naoEnviado.energy, 'MWh')} showHeader={false} />
                  </div>
              </div>
           </div>
@@ -1978,7 +2020,6 @@ function AdminDashboard() {
                                                 </tr>
                                             );
                                         })}
-
                                         <tr key={`${area}-subtotal`} className="bg-blue-900/20 border-y-2 border-slate-600 font-bold">
                                             <td className="p-2 border border-slate-700 text-right font-display uppercase text-[10px] tracking-wider text-blue-300">Total {area}</td>
                                             {portfolioData.allConcessionarias.map((conc: string) => {

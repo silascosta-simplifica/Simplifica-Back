@@ -18,9 +18,8 @@ if not RD_TOKEN or not DB_URL:
 
 engine = create_engine(DB_URL)
 
-# --- MAPA DE OBJETIVOS (Igual ao seu Google Script) ---
+# --- MAPA DE OBJETIVOS ---
 def buscar_mapa_objetivos():
-    """Busca todos os funis e cria um mapa {stage_id: objective}"""
     print("🔎 Mapeando objetivos das etapas...")
     try:
         url = f"{RD_URL}/deal_pipelines?token={RD_TOKEN}"
@@ -31,14 +30,12 @@ def buscar_mapa_objetivos():
         pipelines = resp.json()
         for pipe in pipelines:
             for stage in pipe.get('deal_stages', []):
-                # Guarda o objetivo usando o ID da etapa como chave
                 mapa[stage['id']] = stage.get('objective', '')
         return mapa
     except Exception as e:
         print(f"⚠️ Erro ao buscar pipelines: {e}")
         return {}
 
-# Cache global dos objetivos
 MAPA_OBJETIVOS = buscar_mapa_objetivos()
 
 def limpar_uc(valor):
@@ -79,9 +76,7 @@ def processar_negocio(deal):
     consumo_mwh = limpar_decimal(campos.get('Consumo Médio na Venda (MWh)'))
     dia_leitura = limpar_inteiro(campos.get('Data de leitura estimada (Dia)'))
 
-    # Pega o ID da etapa atual do negócio
     stage_id = deal.get('deal_stage', {}).get('id')
-    # Busca o objetivo no nosso mapa
     objetivo_etapa = MAPA_OBJETIVOS.get(stage_id, '')
 
     return {
@@ -91,29 +86,36 @@ def processar_negocio(deal):
         "concessionaria": concessionaria, 
         "area_de_gestao": campos.get('Área de Gestão') or campos.get('Geração Compartilhada'),
         "status_rd": deal.get('deal_stage', {}).get('name'),
-        "objetivo_etapa": objetivo_etapa, # NOVO CAMPO
+        "objetivo_etapa": objetivo_etapa,
         "data_ganho": tratar_data_rd(deal.get('closed_at')),
         "data_protocolo": tratar_data_rd(campos.get('Data do 1º protocolo')), 
         "data_cancelamento": tratar_data_rd(campos.get('Data de pedido de cancelamento')),
         "consumo_medio_mwh": consumo_mwh,
         "dia_leitura": dia_leitura,
         "json_completo": json.dumps(deal), 
-        "updated_at": datetime.now()
+        "updated_at": tratar_data_rd(deal.get('updated_at')) or datetime.now()
     }
 
 def executar_sync_rd():
-    print("🚀 Iniciando Sync RD (Com Objetivos)...")
+    print("🚀 Iniciando Sync RD (Com Objetivos e Limpeza de Deletados)...")
     
     page = 1
     has_more = True
     total_salvos = 0
+    
+    # 1. SACOLA DE IDs ATIVOS
+    ids_ativos_rd = set() 
+    
+    sucesso_total = True # Trava de segurança para não deletar nada se a API falhar no meio
     
     while has_more:
         print(f"🔄 Baixando pág {page}...", end='\r')
         try:
             url = f"{RD_URL}/deals?token={RD_TOKEN}&page={page}&limit=200&sort=updated_at&direction=desc"
             resp = requests.get(url)
-            if resp.status_code != 200: break
+            if resp.status_code != 200: 
+                sucesso_total = False
+                break
                 
             data = resp.json()
             deals = data.get('deals', [])
@@ -122,8 +124,11 @@ def executar_sync_rd():
                 
             lista = []
             for deal in deals:
+                # 2. GUARDA O ID NA SACOLA
+                ids_ativos_rd.add(deal.get('id'))
+                
                 dado = processar_negocio(deal)
-                if dado['uc']: lista.append(dado)
+                lista.append(dado)
             
             if lista:
                 stmt = text("""
@@ -148,20 +153,48 @@ def executar_sync_rd():
                         data_cancelamento = EXCLUDED.data_cancelamento,
                         consumo_medio_mwh = EXCLUDED.consumo_medio_mwh,
                         dia_leitura = EXCLUDED.dia_leitura,
+                        nome_negocio = EXCLUDED.nome_negocio,
+                        json_completo = EXCLUDED.json_completo,
                         updated_at = EXCLUDED.updated_at;
                 """)
                 with engine.begin() as conn: conn.execute(stmt, lista)
                 total_salvos += len(lista)
-                print(f"✅ Pág {page}: +{len(lista)} negócios.")
+                print(f"✅ Pág {page}: +{len(lista)} negócios atualizados/inseridos.")
 
             page += 1
             time.sleep(0.2)
             
         except Exception as e:
-            print(f"\n❌ Erro: {e}")
-            time.sleep(5) 
+            print(f"\n❌ Erro na página {page}: {e}")
+            sucesso_total = False
+            break 
             
-    print(f"\n🏁 Fim! Total: {total_salvos}")
+    print(f"\n🏁 Fim da leitura! Total processado da API: {total_salvos}")
+    
+    # --- 3. ROTINA DE LIMPEZA (DELETAR FANTASMAS) ---
+    if sucesso_total and len(ids_ativos_rd) > 0:
+        print("🧹 Iniciando limpeza de negócios deletados...")
+        try:
+            with engine.begin() as conn:
+                # Puxa todos os IDs que estão hoje no banco
+                result = conn.execute(text("SELECT id_negocio FROM raw_rd_station")).fetchall()
+                ids_no_banco = {row[0] for row in result}
+                
+                # Descobre quem está no banco mas NÃO está mais no RD Station
+                ids_para_deletar = ids_no_banco - ids_ativos_rd
+                
+                if ids_para_deletar:
+                    # Deleta os fantasmas
+                    # Converte o set para tupla para o SQLAlchemy entender a lista no "IN"
+                    stmt_delete = text("DELETE FROM raw_rd_station WHERE id_negocio IN :ids_fantasmas")
+                    conn.execute(stmt_delete, {"ids_fantasmas": tuple(ids_para_deletar)})
+                    print(f"🗑️  Limpeza concluída! {len(ids_para_deletar)} registros deletados do banco.")
+                else:
+                    print("✨ Nenhum registro precisou ser deletado. A base já estava idêntica.")
+        except Exception as e:
+            print(f"❌ Erro ao tentar deletar registros: {e}")
+    else:
+        print("⚠️ A limpeza foi ignorada porque houve falha ao baixar os dados ou a lista veio vazia.")
 
 if __name__ == "__main__":
     executar_sync_rd()
