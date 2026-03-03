@@ -5,7 +5,7 @@ import { useAnalytics } from '../hooks/useAnalytics';
 import { 
     LogOut, Table as TableIcon, Search, Settings2, Check, 
     ChevronDown, ChevronLeft, ChevronRight, KeyRound, CheckCircle2, ShieldAlert, Loader2,
-    Zap, PiggyBank, Receipt, Download, PlayCircle, Wallet, Users, FileText, Printer, Activity, FileDown, TrendingUp
+    Zap, PiggyBank, Receipt, Download, PlayCircle, Wallet, Users, FileText, Printer, Activity, FileDown, TrendingUp, ExternalLink
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 
@@ -36,11 +36,11 @@ const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon, ful
     return (
         <div className={`relative ${fullWidth ? 'w-full' : ''}`} ref={containerRef}>
             <button onClick={() => setIsOpen(!isOpen)} className={`bg-slate-800 border ${isOpen ? 'border-yellow-500 ring-1 ring-yellow-500/50' : 'border-slate-700'} rounded-lg px-3 py-2.5 text-sm text-white outline-none flex items-center justify-between transition-all hover:bg-slate-700 w-full`}>
-                <div className="flex items-center gap-2 truncate">
+                <div className="flex items-center gap-2 min-w-0">
                     {Icon && <Icon size={14} className="text-slate-400 shrink-0" />}
                     <span className={`truncate ${selected.length === 0 ? 'text-slate-400' : 'text-slate-200'}`}>{displayValue}</span>
                 </div>
-                <ChevronDown size={14} className={`text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={`text-slate-500 transition-transform shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             {isOpen && (
                 <div className="absolute top-full right-0 mt-2 w-full min-w-[220px] max-h-72 flex flex-col bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
@@ -95,7 +95,7 @@ export default function PortalParceiro() {
     const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
     const [filtroParceiro, setFiltroParceiro] = useState<string[]>([]); 
     
-    const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Data Ganho', 'Data Protocolo', 'Data Cancelamento', 'Mês Referência', 'Etapa', 'Economia (R$)', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Percentual (%)', 'Comissão (R$)', 'Status Pagamento', 'Data Emissão', 'Vencimento', 'Código PIX', 'Código de Barras'];
+    const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Data Ganho', 'Data Protocolo', 'Data Cancelamento', 'Mês Referência', 'Etapa', 'Economia (R$)', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Percentual (%)', 'Comissão (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Data Emissão', 'Vencimento', 'Código PIX', 'Código de Barras'];
     const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Mês Referência', 'Etapa', 'Status Pagamento', 'Eficiência (%)', 'Comissão (R$)', 'Código PIX']);
 
     const [page, setPage] = useState(1);
@@ -321,6 +321,13 @@ export default function PortalParceiro() {
     const toDateBR = (d: any) => { if (!d) return '-'; try { return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'UTC' }); } catch { return '-'; } };
     const formatMesRef = (m: string) => { if (!m) return '-'; const parts = m.split('-'); if (parts.length >= 2) return `${parts[1]}/${parts[0]}`; return m; };
 
+    const getSortableDate = (mesRef: string) => {
+        if (!mesRef || mesRef === 'N/D' || mesRef === '-') return 0;
+        const parts = mesRef.split('/');
+        if (parts.length === 2) return parseInt(parts[1]) * 100 + parseInt(parts[0]); 
+        return 0;
+    };
+
     const data = useMemo(() => {
         if (!rawData) return [];
         const parseNum = (val: any) => (val === null || val === undefined || val === '') ? 0 : (isNaN(Number(val)) ? 0 : Number(val));
@@ -347,12 +354,13 @@ export default function PortalParceiro() {
             compensacao_kwh: parseNum(d.compensacao_kwh) || parseNum(d['compensação_total_kwh']),
             eficiencia_compensacao: parseNum(d.eficiencia_compensacao),
             economia_rs: parseNum(d.economia_rs),
+            saldo: parseNum(d.saldo),
             data_ganho: d.data_ganho,
             data_protocolo: d.data_protocolo || d['data_do_1º_protocolo'],
             data_cancelamento: d.data_cancelamento || d['data_de_pedido_de_cancelamento'],
             data_emissao: d.data_emissao || d.emissão_do_boleto,
             vencimento: d.vencimento || d.vencimento_do_boleto,
-            codigo_pix: d.codigo_pix,       
+            codigo_pix: d.codigo_pix,        
             codigo_barras: d.codigo_barras,
             asaas_id: d.asaas_id,
             id_chave_composta: d.id_chave_composta || `${d.uc}-${d['mês_referência']}`,
@@ -384,8 +392,10 @@ export default function PortalParceiro() {
             return true;
         });
 
-        if (isAdmin) return dadosTratados; 
-        return dadosTratados.filter((d: any) => d.quem_indicou === parceiroLogado);
+        let finalData = isAdmin ? dadosTratados : dadosTratados.filter((d: any) => d.quem_indicou === parceiroLogado);
+        
+        // Ordenamos por data decrescente (mais nova pra mais velha) para o reduce pegar sempre o saldo mais recente
+        return finalData.sort((a: any, b: any) => getSortableDate(b.mes_referencia) - getSortableDate(a.mes_referencia));
     }, [rawData, isAdmin, parceiroLogado]);
 
     const ucsUnicas = useMemo(() => {
@@ -413,7 +423,12 @@ export default function PortalParceiro() {
     const metrics = useMemo(() => {
         const uniqueUcs = new Set();
         const totals = filteredData.reduce((acc, row) => {
-            uniqueUcs.add(row.uc);
+            // Se a UC ainda não apareceu (e estamos varrendo do mês mais novo pro mais velho), o saldo dela é o atual
+            if (!uniqueUcs.has(row.uc)) {
+                uniqueUcs.add(row.uc);
+                acc.saldoAtual += (row.saldo || 0);
+            }
+            
             acc.consumo += (row.consumo_kwh || 0);
             acc.compensacao += (row.compensacao_kwh || 0);
             acc.boleto += (row.boleto_simplifica || 0);
@@ -430,7 +445,7 @@ export default function PortalParceiro() {
             }
 
             return acc;
-        }, { consumo: 0, compensacao: 0, boleto: 0, economia: 0, comissao: 0 });
+        }, { consumo: 0, compensacao: 0, boleto: 0, economia: 0, comissao: 0, saldoAtual: 0 });
 
         return { ...totals, totalUcs: uniqueUcs.size };
     }, [filteredData, comissoes]);
@@ -461,6 +476,7 @@ export default function PortalParceiro() {
         if (colunasAtivas.includes('Eficiência (%)')) headers.push('Eficiência (%)');
         if (colunasAtivas.includes('Percentual (%)')) headers.push('Percentual (%)');
         if (colunasAtivas.includes('Comissão (R$)')) headers.push('Comissao (R$)');
+        if (colunasAtivas.includes('Saldo (kWh)')) headers.push('Saldo (kWh)');
         if (colunasAtivas.includes('Etapa')) headers.push('Etapa');
         if (colunasAtivas.includes('Status Pagamento')) headers.push('Status Pagamento');
         if (colunasAtivas.includes('Concessionária')) headers.push('Concessionaria');
@@ -502,6 +518,7 @@ export default function PortalParceiro() {
             if (colunasAtivas.includes('Eficiência (%)')) rowData.push(row.eficiencia_compensacao > 0 ? (row.eficiencia_compensacao * 100).toFixed(1) + '%' : '-');
             if (colunasAtivas.includes('Percentual (%)')) rowData.push(perc > 0 ? `${perc}%` : '-');
             if (colunasAtivas.includes('Comissão (R$)')) rowData.push(isPago && comissaoTotal > 0 ? comissaoTotal : '-');
+            if (colunasAtivas.includes('Saldo (kWh)')) rowData.push(row.saldo || 0);
             if (colunasAtivas.includes('Etapa')) rowData.push(row.objetivo_etapa || '-');
             if (colunasAtivas.includes('Status Pagamento')) rowData.push(badge.text !== '-' ? badge.text : '');
             if (colunasAtivas.includes('Concessionária')) rowData.push(row.concessionaria || '-');
@@ -708,50 +725,78 @@ export default function PortalParceiro() {
                 {/* ABA 1: CARTEIRA */}
                 {activeTab === 'carteira' && (
                     <div className="print:hidden space-y-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 animate-in fade-in zoom-in duration-300">
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                                <div className="bg-indigo-500/10 p-3 rounded-full"><Users size={24} className="text-indigo-400"/></div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">UCs Vinculadas</p>
-                                    <p className="text-xl font-bold font-mono text-white">{new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 animate-in fade-in zoom-in duration-300">
+                            
+                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <Users size={14} className="text-indigo-400 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">UCs Vinculadas</p>
                                 </div>
+                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-white truncate w-full" title={new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}>
+                                    {new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}
+                                </p>
                             </div>
 
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                                <div className="bg-blue-500/10 p-3 rounded-full"><Zap size={24} className="text-blue-500"/></div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Consumo Real</p>
-                                    <p className="text-xl font-bold font-mono text-white">{Math.round(metrics.consumo).toLocaleString('pt-BR')} <span className="text-[10px] text-slate-400">kWh</span></p>
+                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <Zap size={14} className="text-blue-500 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Consumo Real</p>
                                 </div>
+                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-white truncate w-full" title={Math.round(metrics.consumo).toLocaleString('pt-BR')}>
+                                    {Math.round(metrics.consumo).toLocaleString('pt-BR')} <span className="text-sm text-slate-400 font-normal">kWh</span>
+                                </p>
                             </div>
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                                <div className="bg-emerald-500/10 p-3 rounded-full"><Zap size={24} className="text-emerald-500"/></div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Compensação</p>
-                                    <p className="text-xl font-bold font-mono text-white">{Math.round(metrics.compensacao).toLocaleString('pt-BR')} <span className="text-[10px] text-slate-400">kWh</span></p>
+
+                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <Zap size={14} className="text-emerald-500 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Compensação</p>
                                 </div>
+                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-white truncate w-full" title={Math.round(metrics.compensacao).toLocaleString('pt-BR')}>
+                                    {Math.round(metrics.compensacao).toLocaleString('pt-BR')} <span className="text-sm text-slate-400 font-normal">kWh</span>
+                                </p>
                             </div>
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                                <div className="bg-yellow-500/10 p-3 rounded-full"><Receipt size={24} className="text-yellow-500"/></div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Faturamento</p>
-                                    <p className="text-xl font-bold font-display text-white">{formatMoney(metrics.boleto)}</p>
+
+                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <Receipt size={14} className="text-yellow-500 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Faturamento</p>
                                 </div>
+                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-white truncate w-full" title={formatMoney(metrics.boleto)}>
+                                    {formatMoney(metrics.boleto)}
+                                </p>
                             </div>
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                                <div className="bg-emerald-500/10 p-3 rounded-full"><PiggyBank size={24} className="text-emerald-400"/></div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Economia Cliente</p>
-                                    <p className="text-xl font-bold font-display text-emerald-400">{formatMoney(metrics.economia)}</p>
+
+                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <PiggyBank size={14} className="text-emerald-400 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Economia Cliente</p>
                                 </div>
+                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-emerald-400 truncate w-full" title={formatMoney(metrics.economia)}>
+                                    {formatMoney(metrics.economia)}
+                                </p>
                             </div>
-                            <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                                <div className="bg-indigo-500/20 p-3 rounded-full"><Wallet size={24} className="text-indigo-400"/></div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider mb-0.5">Comissão Total</p>
-                                    <p className="text-xl font-bold font-display text-indigo-400">{formatMoney(metrics.comissao)}</p>
+
+                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <Wallet size={14} className="text-cyan-400 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Saldo (Atual)</p>
                                 </div>
+                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-cyan-400 truncate w-full" title={Math.round(metrics.saldoAtual).toLocaleString('pt-BR')}>
+                                    {Math.round(metrics.saldoAtual).toLocaleString('pt-BR')} <span className="text-sm text-cyan-400/50 font-normal">kWh</span>
+                                </p>
                             </div>
+
+                            <div className="bg-indigo-900/20 border border-indigo-500/30 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <Wallet size={14} className="text-indigo-400 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider truncate">Comissão Total</p>
+                                </div>
+                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-indigo-400 truncate w-full" title={formatMoney(metrics.comissao)}>
+                                    {formatMoney(metrics.comissao)}
+                                </p>
+                            </div>
+
                         </div>
 
                         <section className={`bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm grid gap-3 items-end ${isAdmin ? 'grid-cols-1 md:grid-cols-3 xl:grid-cols-7' : 'grid-cols-1 md:grid-cols-3 xl:grid-cols-6'}`}>
@@ -818,12 +863,12 @@ export default function PortalParceiro() {
                             </div>
 
                             <div className="overflow-x-auto min-h-[400px]">
-                                <table className="w-full text-sm text-left whitespace-nowrap">
-                                    <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold border-b border-slate-800">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold border-b border-slate-800 whitespace-nowrap">
                                         <tr>
-                                            <th className="px-5 py-4">UC / Cliente</th>
+                                            <th className="px-5 py-4 text-left min-w-[280px]">UC / Cliente</th>
                                             {colunasAtivas.includes('Ações (Links)') && <th className="px-5 py-4 text-center">Ações (Links)</th>}
-                                            {isAdmin && <th className="px-5 py-4 text-indigo-400 bg-indigo-900/10">Parceiro Dono</th>}
+                                            {isAdmin && <th className="px-5 py-4 text-left text-indigo-400 bg-indigo-900/10">Parceiro Dono</th>}
                                             <th className="px-5 py-4 text-right">Consumo (kWh)</th>
                                             <th className="px-5 py-4 text-right">Compensação (kWh)</th>
                                             <th className="px-5 py-4 text-right">Boleto (R$)</th>
@@ -832,18 +877,20 @@ export default function PortalParceiro() {
                                             {colunasAtivas.includes('Eficiência (%)') && <th className="px-5 py-4 text-center">Eficiência (%)</th>}
                                             {colunasAtivas.includes('Percentual (%)') && <th className="px-5 py-4 text-center text-slate-300">Percentual (%)</th>}
                                             {colunasAtivas.includes('Comissão (R$)') && <th className="px-5 py-4 text-right text-indigo-400">Comissão (R$)</th>}
-                                            {colunasAtivas.includes('Etapa') && <th className="px-5 py-4">Etapa</th>}
+                                            {colunasAtivas.includes('Saldo (kWh)') && <th className="px-5 py-4 text-right text-cyan-400">Saldo (kWh)</th>}
+                                            
+                                            {colunasAtivas.includes('Etapa') && <th className="px-5 py-4 text-left">Etapa</th>}
                                             {colunasAtivas.includes('Status Pagamento') && <th className="px-5 py-4 text-center">Status</th>}
-                                            {colunasAtivas.includes('Concessionária') && <th className="px-5 py-4">Concessionária</th>}
+                                            {colunasAtivas.includes('Concessionária') && <th className="px-5 py-4 text-left">Concessionária</th>}
                                             {colunasAtivas.includes('Mês Referência') && <th className="px-5 py-4 text-center">Mês Ref.</th>}
                                             {colunasAtivas.includes('Economia (R$)') && <th className="px-5 py-4 text-right text-emerald-400">Economia (R$)</th>}
-                                            {colunasAtivas.includes('Data Ganho') && <th className="px-5 py-4 text-slate-500">Dt. Ganho</th>}
-                                            {colunasAtivas.includes('Data Protocolo') && <th className="px-5 py-4 text-slate-500">Dt. Protocolo</th>}
-                                            {colunasAtivas.includes('Data Cancelamento') && <th className="px-5 py-4 text-slate-500">Dt. Cancelamento</th>}
-                                            {colunasAtivas.includes('Data Emissão') && <th className="px-5 py-4 text-slate-500">Dt. Emissão</th>}
-                                            {colunasAtivas.includes('Vencimento') && <th className="px-5 py-4 text-slate-500">Vencimento</th>}
-                                            {colunasAtivas.includes('Código PIX') && <th className="px-5 py-4 text-slate-300">Código PIX (Copia/Cola)</th>}
-                                            {colunasAtivas.includes('Código de Barras') && <th className="px-5 py-4 text-slate-300">Código de Barras</th>}
+                                            {colunasAtivas.includes('Data Ganho') && <th className="px-5 py-4 text-left text-slate-500">Dt. Ganho</th>}
+                                            {colunasAtivas.includes('Data Protocolo') && <th className="px-5 py-4 text-left text-slate-500">Dt. Protocolo</th>}
+                                            {colunasAtivas.includes('Data Cancelamento') && <th className="px-5 py-4 text-left text-slate-500">Dt. Cancelamento</th>}
+                                            {colunasAtivas.includes('Data Emissão') && <th className="px-5 py-4 text-left text-slate-500">Dt. Emissão</th>}
+                                            {colunasAtivas.includes('Vencimento') && <th className="px-5 py-4 text-left text-slate-500">Vencimento</th>}
+                                            {colunasAtivas.includes('Código PIX') && <th className="px-5 py-4 text-left text-slate-300">Código PIX (Copia/Cola)</th>}
+                                            {colunasAtivas.includes('Código de Barras') && <th className="px-5 py-4 text-left text-slate-300">Código de Barras</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800/50">
@@ -859,19 +906,26 @@ export default function PortalParceiro() {
                                             if (eficPercent >= 90) { eficColor = 'text-emerald-400'; eficBg = 'bg-emerald-900/40 border-emerald-800/50'; }
                                             else if (eficPercent >= 70) { eficColor = 'text-yellow-400'; eficBg = 'bg-yellow-900/40 border-yellow-800/50'; }
 
-                                            // Lógica Limpa de Links da Lumi (Abrir direto no navegador evita CORS)
                                             const linkBoletoLumiDireto = row.fonte_dados === 'LUMI' && row.link_boleto 
                                                 ? `https://api.labs-lumi.com.br/faturas/download/${row.link_boleto}` 
                                                 : null;
 
                                             return (
-                                                <tr key={chaveLinha} className="hover:bg-slate-800/40 transition-colors">
-                                                    <td className="px-5 py-3">
+                                                <tr key={chaveLinha} className="hover:bg-slate-800/40 transition-colors whitespace-nowrap">
+                                                    <td className="px-5 py-3 text-left">
                                                         <div className="font-mono text-slate-200 font-bold">{row.uc}</div>
-                                                        <div className="text-xs text-slate-500 truncate max-w-[200px]" title={row.nome_cliente}>{row.nome_cliente || 'Sem Nome'}</div>
+                                                        <div className="text-xs text-slate-500 whitespace-normal max-w-[350px] leading-tight mt-0.5" title={row.nome_cliente}>
+                                                            {row.id_negocio ? (
+                                                                <a href={`https://crm.rdstation.com/app/deals/${row.id_negocio}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline transition-colors inline-flex items-center gap-1 group" title="Abrir negócio no RD Station CRM">
+                                                                    <span>{row.nome_cliente || 'Sem Nome'}</span>
+                                                                    <ExternalLink size={10} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                                                </a>
+                                                            ) : (
+                                                                <span>{row.nome_cliente || 'Sem Nome'}</span>
+                                                            )}
+                                                        </div>
                                                     </td>
 
-                                                    {/* NOVA COLUNA AÇÕES LADO A LADO COM O NOME */}
                                                     {colunasAtivas.includes('Ações (Links)') && (
                                                         <td className="px-5 py-3 text-center">
                                                             <div className="flex items-center justify-center gap-2">
@@ -928,7 +982,7 @@ export default function PortalParceiro() {
                                                         </td>
                                                     )}
 
-                                                    {isAdmin && <td className="px-5 py-3 text-xs font-medium text-indigo-300 bg-indigo-900/5">{row.quem_indicou || '-'}</td>}
+                                                    {isAdmin && <td className="px-5 py-3 text-left text-xs font-medium text-indigo-300 bg-indigo-900/5">{row.quem_indicou || '-'}</td>}
                                                     <td className="px-5 py-3 text-right font-mono text-slate-300">{Number(row.consumo_kwh).toLocaleString('pt-BR')}</td>
                                                     <td className="px-5 py-3 text-right font-mono text-emerald-400">{Number(row.compensacao_kwh).toLocaleString('pt-BR')}</td>
                                                     <td className="px-5 py-3 text-right font-medium text-yellow-400">{formatMoney(row.boleto_simplifica)}</td>
@@ -970,23 +1024,25 @@ export default function PortalParceiro() {
                                                         </td>
                                                     )}
 
-                                                    {colunasAtivas.includes('Etapa') && <td className="px-5 py-3 text-xs text-slate-300">{row.objetivo_etapa || '-'}</td>}
+                                                    {colunasAtivas.includes('Saldo (kWh)') && <td className="px-5 py-3 text-right font-mono text-cyan-400">{Number(row.saldo || 0).toLocaleString('pt-BR')}</td>}
+
+                                                    {colunasAtivas.includes('Etapa') && <td className="px-5 py-3 text-left text-xs text-slate-300">{row.objetivo_etapa || '-'}</td>}
                                                     {colunasAtivas.includes('Status Pagamento') && (
                                                         <td className="px-5 py-3 text-center">
                                                             {badge.text !== '-' ? <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold border ${badge.color} ${badge.bg}`}>{badge.text}</span> : <span className="text-slate-600">-</span>}
                                                         </td>
                                                     )}
-                                                    {colunasAtivas.includes('Concessionária') && <td className="px-5 py-3 text-xs text-slate-400">{row.concessionaria || '-'}</td>}
+                                                    {colunasAtivas.includes('Concessionária') && <td className="px-5 py-3 text-left text-xs text-slate-400">{row.concessionaria || '-'}</td>}
                                                     {colunasAtivas.includes('Mês Referência') && <td className="px-5 py-3 text-center font-mono text-xs text-slate-400">{formatMesRef(row.mes_referencia)}</td>}
                                                     {colunasAtivas.includes('Economia (R$)') && <td className="px-5 py-3 text-right text-emerald-500">{formatMoney(row.economia_rs)}</td>}
-                                                    {colunasAtivas.includes('Data Ganho') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.data_ganho)}</td>}
-                                                    {colunasAtivas.includes('Data Protocolo') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.data_protocolo)}</td>}
-                                                    {colunasAtivas.includes('Data Cancelamento') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.data_cancelamento)}</td>}
-                                                    {colunasAtivas.includes('Data Emissão') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.data_emissao)}</td>}
-                                                    {colunasAtivas.includes('Vencimento') && <td className="px-5 py-3 text-xs text-slate-500">{toDateBR(row.vencimento)}</td>}
+                                                    {colunasAtivas.includes('Data Ganho') && <td className="px-5 py-3 text-left text-xs text-slate-500">{toDateBR(row.data_ganho)}</td>}
+                                                    {colunasAtivas.includes('Data Protocolo') && <td className="px-5 py-3 text-left text-xs text-slate-500">{toDateBR(row.data_protocolo)}</td>}
+                                                    {colunasAtivas.includes('Data Cancelamento') && <td className="px-5 py-3 text-left text-xs text-slate-500">{toDateBR(row.data_cancelamento)}</td>}
+                                                    {colunasAtivas.includes('Data Emissão') && <td className="px-5 py-3 text-left text-xs text-slate-500">{toDateBR(row.data_emissao)}</td>}
+                                                    {colunasAtivas.includes('Vencimento') && <td className="px-5 py-3 text-left text-xs text-slate-500">{toDateBR(row.vencimento)}</td>}
                                                     
                                                     {colunasAtivas.includes('Código PIX') && (
-                                                        <td className="px-5 py-3 text-xs font-mono text-slate-400">
+                                                        <td className="px-5 py-3 text-left text-xs font-mono text-slate-400">
                                                             {isPago ? (
                                                                 <span className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Fatura Paga</span>
                                                             ) : row.codigo_pix ? (
@@ -1006,7 +1062,7 @@ export default function PortalParceiro() {
                                                     )}
                                                     
                                                     {colunasAtivas.includes('Código de Barras') && (
-                                                        <td className="px-5 py-3 text-xs font-mono text-slate-400">
+                                                        <td className="px-5 py-3 text-left text-xs font-mono text-slate-400">
                                                             {isPago ? (
                                                                 <span className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Fatura Paga</span>
                                                             ) : row.codigo_barras ? (
@@ -1041,10 +1097,10 @@ export default function PortalParceiro() {
                     </div>
                 )}
 
-                {/* --- ABA: RELATÓRIO DO CLIENTE (PRINT-FRIENDLY A4) --- */}
+                {/* --- ABA 2: RELATÓRIO DO CLIENTE (PRINT-FRIENDLY A4) --- */}
                 {activeTab === 'relatorio' && (
                     <div id="relatorio-print-container" className="flex flex-col gap-6 w-full mx-auto print:max-w-[210mm] page-break-inside-avoid">
-                        {/* CONTROLES DE IMPRESSÃO - SOMEM AO IMPRIMIR */}
+                        {/* CONTROLES DE IMPRESSÃO */}
                         <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden flex flex-col sm:flex-row gap-4 justify-between items-center z-20 max-w-[900px] w-full mx-auto">
                             <div className="flex flex-col gap-1 w-full sm:w-[400px]">
                                 <label className="text-xs font-bold font-display text-slate-400 uppercase tracking-wider">Selecione o Cliente / UC</label>
@@ -1095,10 +1151,10 @@ export default function PortalParceiro() {
 
                         {/* O RELATÓRIO EM SI */}
                         {relatorioData ? (
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-2 w-full max-w-[900px] mx-auto print:w-full print:max-w-full print:text-white print:bg-slate-900">
+                            <div className="bg-slate-900 print:bg-[#0a0a0a] border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-2 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full print:text-white page-break-inside-avoid">
                                 
                                 {/* HEADER RELATÓRIO */}
-                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-2 mb-6 print:mb-3 print-break-avoid">
+                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-3 mb-6 print:mb-5">
                                     <div>
                                         <h1 className="text-3xl print:text-2xl font-display font-bold text-white mb-1">{relatorioData.infoCadastral.nome_cliente}</h1>
                                         <p className="text-slate-400 font-mono text-sm print:text-xs">UC: {relatorioData.infoCadastral.uc}</p>
@@ -1111,22 +1167,22 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* INFO CADASTRAL E STATUS */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-2 mb-8 print:mb-3 print-break-avoid">
-                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-3 mb-8 print:mb-6">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Concessionária</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">{relatorioData.infoCadastral.concessionaria}</p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Cliente Desde</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">{toDateBR(relatorioData.infoCadastral.data_ganho) !== '-' ? toDateBR(relatorioData.infoCadastral.data_ganho) : 'Não informado'}</p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Eficiência Média</p>
                                         <p className={`text-sm print:text-xs font-bold ${relatorioData.eficienciaMedia >= 90 ? 'text-emerald-400' : relatorioData.eficienciaMedia >= 70 ? 'text-yellow-400' : 'text-rose-400'}`}>
                                             {relatorioData.eficienciaMedia > 0 ? relatorioData.eficienciaMedia.toFixed(1) + '%' : 'N/D'}
                                         </p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Consumo Total</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">
                                             {Math.round(relatorioData.totalConsumo).toLocaleString('pt-BR')} kWh
@@ -1135,8 +1191,8 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* GRANDES NÚMEROS DE ECONOMIA E COMPENSAÇÃO */}
-                                <div className="flex flex-col sm:flex-row gap-6 print:gap-4 mb-8 print:mb-3 print-break-avoid">
-                                    <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
+                                <div className="flex flex-col sm:flex-row gap-6 print:gap-5 mb-8 print:mb-6 page-break-inside-avoid">
+                                    <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 print:border-emerald-800/50 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <PiggyBank size={32} className="text-emerald-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
                                         <p className="text-xs print:text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Economia Total Acumulada</p>
                                         <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{formatMoney(relatorioData.totalEco)}</h2>
@@ -1147,7 +1203,7 @@ export default function PortalParceiro() {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex-1 bg-blue-900/10 border border-blue-800/30 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
+                                    <div className="flex-1 bg-blue-900/10 border border-blue-800/30 print:border-blue-800/50 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <Zap size={32} className="text-blue-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
                                         <p className="text-xs print:text-[11px] font-bold text-blue-500 uppercase tracking-widest mb-1">Total de Energia Compensada</p>
                                         <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{Math.round(relatorioData.totalComp).toLocaleString('pt-BR')} <span className="text-lg print:text-base text-blue-400">kWh</span></h2>
@@ -1155,7 +1211,7 @@ export default function PortalParceiro() {
                                 </div>
 
                                 {/* MÉTRICAS FINANCEIRAS COMPARATIVAS */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-2 mb-10 print:mb-6 print-break-avoid">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-3 mb-10 print:mb-8 page-break-inside-avoid">
                                     <div className="bg-slate-900 p-4 print:p-3 border border-slate-700 rounded-xl flex justify-between items-center">
                                         <div className="flex items-center gap-3 print:gap-2">
                                             <div className="bg-rose-500/10 p-2 print:p-1.5 rounded-full"><TrendingUp size={18} className="text-rose-400 print:h-5 print:w-5"/></div>
@@ -1174,9 +1230,9 @@ export default function PortalParceiro() {
 
                                 {/* GRÁFICO (ÚNICO E ALARGADO) */}
                                 <div className="mb-10 print:mb-30 print-break-avoid relative z-0">
-                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-6 print:mb-2 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (Últimos 12 meses)</h3>
-                                    <div className="w-full h-[300px] print:h-[220px] print:pr-4 relative">
-                                        <ResponsiveContainer width="99%" height="100%">
+                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-6 print:mb-4 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (Últimos 12 meses)</h3>
+                                    <div className="w-full h-[300px] print:h-[300px]">
+                                        <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 30, left: -10, bottom: 5 }} barGap={2}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                                 <XAxis dataKey="mes" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickMargin={10}/>

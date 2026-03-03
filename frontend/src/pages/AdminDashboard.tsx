@@ -30,6 +30,23 @@ L.Icon.Default.mergeOptions({
 
 // --- COMPONENTES AUXILIARES ---
 
+const getConcLogo = (name: string | null) => {
+    if (!name) return null;
+    const n = name.toUpperCase();
+    if (n.includes('CELESC')) return 'https://upload.wikimedia.org/wikipedia/commons/2/22/CELESC_Logo.png';
+    if (n.includes('RGE')) return 'https://images.seeklogo.com/logo-png/11/3/rge-logo-png_seeklogo-118217.png';
+    if (n.includes('COPEL')) return 'https://monitormercantil.com.br/wp-content/uploads/2022/11/copel.png';
+    if (n.includes('CEEE')) return 'https://upload.wikimedia.org/wikipedia/commons/6/65/Grupo_CEEE.svg';
+    if (n.includes('GOIÁS') || n.includes('GOIAS') || n.includes('EQUATORIAL-GO') || n.includes('EQTL GO')) return 'https://logospng.org/wp-content/uploads/equatorial-energia.png';
+    if (n.includes('CPFL')) return 'https://www.cpfl.com.br/sites/cpfl/files/2021-12/Logo-Paulista.png';
+    if (n.includes('ELEKTRO')) return 'https://logospng.org/wp-content/uploads/neoenergia.png';
+    if (n.includes('ENEL')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Enel_Group_logo.svg/960px-Enel_Group_logo.svg.png';
+    if (n.includes('CEMIG')) return 'https://logospng.org/wp-content/uploads/cemig.png';
+    if (n.includes('LIGHT')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Light_Servi%C3%A7os_Eletricidade.svg/1280px-Light_Servi%C3%A7os_Eletricidade.svg.png';
+    if (n.includes('EQTL') || n.includes('EQUATORIAL')) return 'https://logospng.org/wp-content/uploads/equatorial-energia.png';
+    return null;
+};
+
 const ClientMap = ({ clients }: { clients: any[] }) => {
     const locations = useMemo(() => {
         const points: any[] = [];
@@ -237,14 +254,22 @@ const FinancialTable = ({ title, data, colorClass, totalValue, totalCompensated,
       {!showHeader && <div className={`sticky top-0 p-2 text-xs font-bold font-display uppercase tracking-wider text-center ${colorClass.split(' ')[0]} bg-slate-950/90 backdrop-blur-sm z-10 border-b border-slate-800`}>{title}</div>}
       <table className="w-full text-sm text-left text-slate-400">
         <thead className="text-xs text-slate-200 uppercase bg-slate-900/50 sticky top-[33px] z-0 shadow-sm">
-          <tr><th className="px-4 py-3 font-semibold">UC</th><th className="px-4 py-3 font-semibold">Cliente</th><th className="px-4 py-3 text-right font-semibold">Valor R$</th></tr>
+          <tr>
+            <th className="px-4 py-3 font-semibold">UC</th>
+            <th className="px-4 py-3 text-center font-semibold">Cliente</th>
+            <th className="px-4 py-3 text-right font-semibold">Valor R$</th>
+          </tr>
         </thead>
         <tbody className="divide-y divide-slate-700/50">
           {data.map((row: any, idx: number) => (
             <tr key={idx} className="hover:bg-slate-700/50 transition-colors">
               <td className="px-4 py-2 font-mono text-xs text-slate-300">{row.uc}</td>
-              <td className="px-4 py-2 truncate max-w-[120px] text-slate-200" title={row.nome}>{row.nome}</td>
-              <td className="px-4 py-2 text-right text-white font-medium">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(row.total_fatura)}</td>
+              <td className="px-4 py-2 text-center text-[11px] leading-tight text-slate-200 whitespace-normal break-words">
+                {row.nome}
+              </td>
+              <td className="px-4 py-2 text-right text-xs text-white font-medium">
+                {new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(row.total_fatura)}
+              </td>
             </tr>
           ))}
           {data.length === 0 && (<tr><td colSpan={3} className="text-center py-10 text-slate-500">Nenhum registro.</td></tr>)}
@@ -811,7 +836,7 @@ function AdminDashboard() {
 
     const tarifaDist = Object.keys(tarifaMap).map(k => ({
         name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'),
-        tarifa: Number((tarifaMap[k].sumR$ / tarifaMap[k].sumKwh).toFixed(3))
+        tarifa: Number((tarifaMap[k].sumR$ / tarifaMap[k].sumKwh).toFixed(5))
     })).sort((a,b) => b.tarifa - a.tarifa);
 
     return {
@@ -819,7 +844,9 @@ function AdminDashboard() {
             { name: 'Pessoa Jurídica', ucs: pfPj.PJ.count, consumo: pfPj.PJ.consumo, cor: '#10b981' }, 
             { name: 'Pessoa Física', ucs: pfPj.PF.count, consumo: pfPj.PF.consumo, cor: '#3b82f6' }   
         ].filter(d => d.ucs > 0),
-        churnData: Object.keys(churn).map(k => ({ name: k, value: churn[k].count, consumo: churn[k].consumo })).sort((a,b) => b.value - a.value).slice(0, 7),
+        
+        churnData: Object.keys(churn).map(k => ({ name: k, value: churn[k].count, consumo: churn[k].consumo })).sort((a,b) => b.value - a.value),
+        
         churnRate,
         churnTitle,
         ticketData: Object.keys(ticketGrupo).map(k => ({
@@ -830,10 +857,12 @@ function AdminDashboard() {
              fill: ticketGrupo[k].macro === 'Grupo A' ? '#6366f1' : '#eab308' 
         })).sort((a,b) => a.name.localeCompare(b.name)),
         descontoGeral: countDesconto > 0 ? (totalDesconto / countDesconto).toFixed(1) : '0',
+        
         descontoDist: Object.keys(descontos).map(k => ({
              name: k.replace('EQUATORIAL', 'EQTL').replace('ENERGISA', 'ENG'), 
              desconto: Number((descontos[k].sum / descontos[k].count).toFixed(1))
         })).sort((a,b) => b.desconto - a.desconto),
+        
         tarifaDist,
         slaGeral,
         slaDist
@@ -922,52 +951,71 @@ function AdminDashboard() {
     };
   }, [emissaoBaseData]);
 
+  // CARTEIRA DE CLIENTES
   const portfolioData = useMemo(() => {
-    const allConcessionarias = Array.from(new Set(data.map(d => d.concessionaria_norm).filter(c => c !== 'Outra'))).sort();
-    const matrix: any = {};
-    const concessionariaTotals: any = {};
-    const areaTotals: any = {}; 
+      const matrix: any = {};
+      const concessionariaTotals: any = {};
+      const areaTotals: any = {};
+      const globalTotal = { ucs: 0, mwh: 0 };
 
-    allConcessionarias.forEach(conc => concessionariaTotals[conc] = { ucs: 0, mwh: 0 });
-    const globalTotal = { ucs: 0, mwh: 0 };
+      // Regra de pureza: ignora apenas se a etapa for inválida ou se a área de gestão for explicitamente "Outros" / vazia.
+      const validCrmData = crmData.filter((item: any) => {
+          const etapa = item.objetivo_etapa;
+          const area = item.area_de_gestao;
+          
+          const isEtapaValid = etapa && String(etapa).trim() !== '' && String(etapa).toLowerCase() !== 'null';
+          const isAreaValid = area && String(area).trim() !== '' && String(area).toLowerCase() !== 'null' && String(area).trim().toLowerCase() !== 'outros';
+          
+          return isEtapaValid && isAreaValid;
+      });
 
-    uniqueUCsProfile.forEach(item => {
-        const area = item.area_norm || 'Outros';
-        const etapa = item.objetivo_etapa_norm || 'Sem Etapa';
-        const conc = item.concessionaria_norm;
-        const mwh = item.consumo_mwh || 0;
+      const allConcessionarias = Array.from(new Set(validCrmData.map((d: any) => d.concessionaria || 'Outra'))).filter(c => c !== 'Outra' && c !== '' && c !== 'null').sort();
 
-        if (!matrix[area]) matrix[area] = {};
-        if (!matrix[area][etapa]) {
-            matrix[area][etapa] = { rows: {}, totalRow: { ucs: 0, mwh: 0 } };
-            allConcessionarias.forEach(c => matrix[area][etapa].rows[c] = { ucs: 0, mwh: 0 });
-        }
+      allConcessionarias.forEach((conc: string) => concessionariaTotals[conc] = { ucs: 0, mwh: 0 });
 
-        if (!areaTotals[area]) {
-            areaTotals[area] = { rows: {}, totalRow: { ucs: 0, mwh: 0 } };
-            allConcessionarias.forEach(c => areaTotals[area].rows[c] = { ucs: 0, mwh: 0 });
-        }
+      validCrmData.forEach((item: any) => {
+          const area = item.area_de_gestao;
+          const etapa = item.objetivo_etapa;
+          const conc = item.concessionaria || 'Outra';
+          const mwh = Number(item.consumo_medio_mwh) || 0;
 
-        if (allConcessionarias.includes(conc)) {
-            matrix[area][etapa].rows[conc].ucs += 1;
-            matrix[area][etapa].rows[conc].mwh += mwh;
-            matrix[area][etapa].totalRow.ucs += 1;
-            matrix[area][etapa].totalRow.mwh += mwh;
+          if (!matrix[area]) matrix[area] = {};
+          if (!matrix[area][etapa]) {
+              matrix[area][etapa] = { rows: {}, totalRow: { ucs: 0, mwh: 0 } };
+              allConcessionarias.forEach((c: string) => matrix[area][etapa].rows[c] = { ucs: 0, mwh: 0 });
+          }
+          if (!areaTotals[area]) {
+              areaTotals[area] = { rows: {}, totalRow: { ucs: 0, mwh: 0 } };
+              allConcessionarias.forEach((c: string) => areaTotals[area].rows[c] = { ucs: 0, mwh: 0 });
+          }
 
-            concessionariaTotals[conc].ucs += 1;
-            concessionariaTotals[conc].mwh += mwh;
-            globalTotal.ucs += 1;
-            globalTotal.mwh += mwh;
+          if (allConcessionarias.includes(conc)) {
+              matrix[area][etapa].rows[conc].ucs += 1;
+              matrix[area][etapa].rows[conc].mwh += mwh;
+              matrix[area][etapa].totalRow.ucs += 1;
+              matrix[area][etapa].totalRow.mwh += mwh;
 
-            areaTotals[area].rows[conc].ucs += 1;
-            areaTotals[area].rows[conc].mwh += mwh;
-            areaTotals[area].totalRow.ucs += 1;
-            areaTotals[area].totalRow.mwh += mwh;
-        }
-    });
+              concessionariaTotals[conc].ucs += 1;
+              concessionariaTotals[conc].mwh += mwh;
+              globalTotal.ucs += 1;
+              globalTotal.mwh += mwh;
 
-    return { matrix, allConcessionarias, concessionariaTotals, globalTotal, areaTotals };
-  }, [uniqueUCsProfile]);
+              areaTotals[area].rows[conc].ucs += 1;
+              areaTotals[area].rows[conc].mwh += mwh;
+              areaTotals[area].totalRow.ucs += 1;
+              areaTotals[area].totalRow.mwh += mwh;
+          } else {
+              matrix[area][etapa].totalRow.ucs += 1;
+              matrix[area][etapa].totalRow.mwh += mwh;
+              globalTotal.ucs += 1;
+              globalTotal.mwh += mwh;
+              areaTotals[area].totalRow.ucs += 1;
+              areaTotals[area].totalRow.mwh += mwh;
+          }
+      });
+
+      return { matrix, allConcessionarias, concessionariaTotals, globalTotal, areaTotals };
+  }, [crmData]);
 
   const operationalData = useMemo(() => {
     if (selectedMesRef === 'Todos') return [];
@@ -1005,6 +1053,7 @@ function AdminDashboard() {
     setSortConfig({ key, direction });
   };
 
+  // CRM TAB: Reflete 100% dos dados brutos
   const crmProcessed = useMemo(() => {
     if (!crmData) return { filtered: [], stats: null, options: { concessionarias: [], areas: [], etapas: [], status: [] } };
 
@@ -1025,9 +1074,9 @@ function AdminDashboard() {
         const key = Object.keys(etapaOrder).find(k => etapa.includes(k));
         return key ? etapaOrder[key] : 99;
     };
-    const etapasSorted = etapasRaw.sort((a, b) => getEtapaWeight(a) - getEtapaWeight(b));
+    const etapasSorted = etapasRaw.sort((a: any, b: any) => getEtapaWeight(a) - getEtapaWeight(b));
 
-    const filtered = crmData.filter(item => {
+    const filtered = crmData.filter((item: any) => {
         const s = crmSearch.toLowerCase();
         const matchSearch = !s || (item.uc && item.uc.toLowerCase().includes(s)) || (item.nome_negocio && item.nome_negocio.toLowerCase().includes(s));
         
@@ -1381,12 +1430,12 @@ function AdminDashboard() {
               </div>
 
               {/* LINHA DE INTELIGÊNCIA COMERCIAL (BI) COM 5 COLUNAS */}
-              <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 mb-6">
+              <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 mb-6">
                 
                 {/* Ticket Médio */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1">
-                    <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2" title="Média de valor faturado separado por tensão (Alta/Baixa)"><DollarSign size={16} className="text-indigo-400"/> Ticket Médio (Tensão)</h3>
-                    <div className="flex-1 min-h-[200px]">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col xl:col-span-1 h-[355px]">
+                    <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2" title="Média de valor faturado separado por tensão (Alta/Baixa)"><DollarSign size={16} className="text-indigo-400"/> Ticket Médio (Tensão)</h3>
+                    <div className="flex-1 min-h-0 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={biMetrics.ticketData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
@@ -1401,20 +1450,20 @@ function AdminDashboard() {
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="flex justify-center gap-4 mt-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div> Grupo A (Alta)</span>
-                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-yellow-500"></div> Grupo B (Baixa)</span>
+                    <div className="flex justify-center gap-3 mt-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div> Grupo A</span>
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-yellow-500"></div> Grupo B</span>
                     </div>
                 </div>
 
                 {/* Descontos Médios */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
-                    <div className="flex justify-between items-center mb-4 shrink-0" title="Percentual médio de desconto aplicado aos clientes de cada distribuidora">
-                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Receipt size={16} className="text-rose-400"/> Descontos Aplicados</h3>
-                        <span className="text-xs bg-slate-950 border border-slate-700 px-2 py-1 rounded-lg font-bold text-rose-400">Média: {biMetrics.descontoGeral}%</span>
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col xl:col-span-1 h-[355px]">
+                    <div className="flex justify-between items-center mb-3 shrink-0" title="Percentual médio de desconto aplicado aos clientes de cada distribuidora">
+                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Receipt size={16} className="text-rose-400"/> Descontos</h3>
+                        <span className="text-[10px] bg-slate-950 border border-slate-700 px-2 py-1 rounded-lg font-bold text-rose-400">Média: {biMetrics.descontoGeral}%</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
-                        <div style={{ height: Math.max(200, biMetrics.descontoDist.length * 35) }}>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin scrollbar-thumb-slate-700 min-h-0">
+                        <div style={{ height: Math.max(200, biMetrics.descontoDist.length * 32) }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={biMetrics.descontoDist} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
@@ -1430,21 +1479,21 @@ function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* TARIFA MÉDIA */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
-                    <div className="flex justify-between items-center mb-4 shrink-0" title="Tarifa Média Aplicada (R$ / kWh) por Distribuidora nos faturamentos reais">
-                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><DollarSign size={16} className="text-emerald-400"/> Tarifa Média (R$)</h3>
+                {/* TARIFA MÉDIA (COM 5 CASAS DECIMAIS) */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col xl:col-span-1 h-[355px]">
+                    <div className="flex justify-between items-center mb-3 shrink-0" title="Tarifa Média Aplicada (R$ / kWh) por Distribuidora nos faturamentos reais">
+                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><DollarSign size={16} className="text-emerald-400"/> Tarifa (R$)</h3>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
-                        <div style={{ height: Math.max(200, biMetrics.tarifaDist.length * 35) }}>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin scrollbar-thumb-slate-700 min-h-0">
+                        <div style={{ height: Math.max(200, biMetrics.tarifaDist.length * 32) }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={biMetrics.tarifaDist} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
+                                <BarChart data={biMetrics.tarifaDist} layout="vertical" margin={{ top: 0, right: 50, left: 10, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
                                     <XAxis type="number" stroke="#94a3b8" fontSize={10} hide />
                                     <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} width={80} axisLine={false} tickLine={false} />
-                                    <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `R$ ${val}`} />
+                                    <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `R$ ${Number(val).toFixed(5)}`} />
                                     <Bar dataKey="tarifa" fill="#10b981" radius={[0, 4, 4, 0]} barSize={16}>
-                                        <LabelList dataKey="tarifa" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `R$ ${v.toFixed(2)}`}/>
+                                        <LabelList dataKey="tarifa" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `R$ ${Number(v).toFixed(5)}`}/>
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
@@ -1453,17 +1502,17 @@ function AdminDashboard() {
                 </div>
 
                 {/* SLA DE FATURAMENTO */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col relative overflow-hidden xl:col-span-1">
-                    <div className="absolute top-0 right-0 p-5 opacity-5 pointer-events-none"><Clock size={100} className="text-blue-500"/></div>
-                    <div className="flex justify-between items-center mb-4 relative z-10 shrink-0" title="Delay (em dias) entre a Fatura da Distribuidora e a Emissão do seu Boleto">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col relative overflow-hidden xl:col-span-1 h-[355px]">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Clock size={100} className="text-blue-500"/></div>
+                    <div className="flex justify-between items-center mb-3 relative z-10 shrink-0" title="Delay (em dias) entre a Fatura da Distribuidora e a Emissão do seu Boleto">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                            <Clock size={16} className="text-blue-400"/> Atraso (Faturamento)
+                            <Clock size={16} className="text-blue-400"/> SLA Fatura
                         </h3>
-                        <span className="text-xs bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded-lg font-bold text-blue-400">Média: {biMetrics.slaGeral}d</span>
+                        <span className="text-[10px] bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded-lg font-bold text-blue-400">Média: {biMetrics.slaGeral}d</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px] relative z-10">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin scrollbar-thumb-slate-700 min-h-0 relative z-10">
                         {biMetrics.slaDist.length > 0 ? (
-                            <div style={{ height: Math.max(200, biMetrics.slaDist.length * 35) }}>
+                            <div style={{ height: Math.max(200, biMetrics.slaDist.length * 32) }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={biMetrics.slaDist} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
@@ -1478,26 +1527,26 @@ function AdminDashboard() {
                             </div>
                         ) : (
                             <div className="h-full flex items-center justify-center text-slate-500 text-xs text-center p-4">
-                                Sem dados de emissão da distribuidora no banco para calcular o delay.
+                                Sem dados de emissão.
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Churn Analítico - Agora permite crescimento vertical e scroll para alinhar com os gráficos vizinhos */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
-                    <div className="flex justify-between items-center mb-4 shrink-0">
+                {/* Churn Analítico */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col xl:col-span-1 h-[355px]">
+                    <div className="flex justify-between items-center mb-3 shrink-0">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2" title={biMetrics.churnTitle}><ShieldAlert size={16} className="text-orange-500"/> {biMetrics.churnTitle}</h3>
-                        <span className="text-xs bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="% de Cancelados (Neste mês filtrado ou Total Histórico) em relação ao total">Churn: {biMetrics.churnRate}%</span>
+                        <span className="text-[10px] bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="% de Cancelados (Neste mês filtrado ou Total Histórico) em relação ao total">Churn: {biMetrics.churnRate}%</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
-                        <div className="flex flex-col justify-start space-y-3">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-0">
+                        <div className="flex flex-col justify-start">
                             {biMetrics.churnData.length > 0 ? biMetrics.churnData.map((c, i) => (
-                                <div key={i} className="flex justify-between items-center text-xs border-b border-slate-800/50 pb-3 last:border-0 last:pb-0">
+                                <div key={i} className="flex justify-between items-center text-xs border-b border-slate-800/50 pb-2.5 mb-2.5 last:border-0 last:pb-0 last:mb-0">
                                     <span className="text-slate-400 truncate pr-2 flex-1 font-medium" title={c.name}>{c.name}</span>
                                     <div className="flex flex-col items-end min-w-max">
                                         <span className="font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded shadow-sm">{c.value} UCs</span>
-                                        <span className="text-[10px] text-slate-500 mt-1 font-mono">{formatEnergySmart(c.consumo, 'kWh')}</span>
+                                        <span className="text-[10px] text-slate-500 mt-0.5 font-mono">{formatEnergySmart(c.consumo, 'kWh')}</span>
                                     </div>
                                 </div>
                             )) : <p className="text-xs text-slate-500 text-center py-4">Nenhum cancelamento na data ou filtros selecionados.</p>}
@@ -1506,7 +1555,7 @@ function AdminDashboard() {
                 </div>
               </div>
 
-              {/* GRÁFICO DE EVOLUÇÃO (Expandido Horizontalmente) */}
+              {/* GRÁFICO DE EVOLUÇÃO */}
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col mb-6">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-bold font-display text-white flex items-center gap-2" title="Crescimento histórico de volume na base (Total ativo vs Entradas/Saídas)"><TrendingUp size={20} className="text-blue-500"/> Evolução da Carteira (MWh vs UCs)</h3>
@@ -1533,7 +1582,7 @@ function AdminDashboard() {
                 </div>
               </div>
 
-              {/* GRÁFICO DE CONSUMO/COMPENSAÇÃO (Comprimido) */}
+              {/* GRÁFICO DE CONSUMO/COMPENSAÇÃO */}
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col mb-8">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                   <div>
@@ -1624,7 +1673,7 @@ function AdminDashboard() {
             <div>
                 <h3 className="text-sm font-bold font-display text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><DollarSign size={16}/> Resumo de Faturamento</h3>
                 
-                {/* TOP CARDS DE FATURAMENTO (Usam a Base Imutável para não piscarem ao buscar) */}
+                {/* TOP CARDS DE FATURAMENTO */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
@@ -1935,26 +1984,26 @@ function AdminDashboard() {
                     <p className="text-sm text-slate-400">Visão consolidada por Canal e Concessionária (Base Total RD Station)</p>
                 </div>
                 
-                <div className="overflow-x-auto p-6">
-                    <table className="w-full text-sm text-left border-collapse border border-slate-700">
+                <div className="overflow-x-auto p-4">
+                    <table className="w-full text-left border-collapse border border-slate-700">
                         <thead>
                             <tr className="bg-blue-900 text-white">
-                                <th rowSpan={2} className="p-3 border border-slate-700 text-center font-display uppercase font-bold w-32">Canal</th>
-                                <th rowSpan={2} className="p-3 border border-slate-700 text-center font-display uppercase font-bold w-48">Etapa</th>
-                                {portfolioData.allConcessionarias.map((conc: string) => (
-                                    <th key={conc} colSpan={2} className="p-3 border border-slate-700 text-center font-bold text-sm tracking-wide">{conc}</th>
+                                <th rowSpan={2} className="px-2 py-1.5 border border-slate-700 text-center font-display uppercase font-bold w-24 text-[10px]">Canal</th>
+                                <th rowSpan={2} className="px-2 py-1.5 border border-slate-700 text-center font-display uppercase font-bold w-32 text-[10px]">Etapa</th>
+                                {[...portfolioData.allConcessionarias].sort().map((conc: string) => (
+                                    <th key={conc} colSpan={2} className="px-2 py-1.5 border border-slate-700 text-center font-bold text-[10px] tracking-wide">{conc}</th>
                                 ))}
-                                <th colSpan={2} className="p-3 border border-slate-700 text-center font-display font-bold bg-slate-800 tracking-wide text-sm">TOTAL</th>
+                                <th colSpan={2} className="px-2 py-1.5 border border-slate-700 text-center font-display font-bold bg-slate-800 tracking-wide text-[10px]">TOTAL</th>
                             </tr>
                             <tr className="bg-blue-950 text-slate-300">
-                                {portfolioData.allConcessionarias.map((conc: string) => (
+                                {[...portfolioData.allConcessionarias].sort().map((conc: string) => (
                                     <React.Fragment key={conc}>
-                                        <th className="p-2 border border-slate-700 text-center w-20 text-xs">UCs</th>
-                                        <th className="p-2 border border-slate-700 text-center w-20 text-yellow-300/80 text-xs">MWh</th>
+                                        <th className="px-1.5 py-1 border border-slate-700 text-center w-16 text-[10px]">UCs</th>
+                                        <th className="px-1.5 py-1 border border-slate-700 text-center w-16 text-yellow-300/80 text-[10px]">MWh</th>
                                     </React.Fragment>
                                 ))}
-                                <th className="p-2 border border-slate-700 text-center w-20 bg-slate-800 text-xs">UCs</th>
-                                <th className="p-2 border border-slate-700 text-center w-20 bg-slate-800 text-yellow-300/80 text-xs">MWh</th>
+                                <th className="px-1.5 py-1 border border-slate-700 text-center w-16 bg-slate-800 text-[10px]">UCs</th>
+                                <th className="px-1.5 py-1 border border-slate-700 text-center w-16 bg-slate-800 text-yellow-300/80 text-[10px]">MWh</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1983,54 +2032,54 @@ function AdminDashboard() {
                                             return (
                                                 <tr key={`${area}-${etapa}`} className={`hover:bg-slate-700/30 transition-colors border-b border-slate-800 ${bgClass}`}>
                                                     {etapaIdx === 0 && (
-                                                        <td rowSpan={etapas.length + 1} className="p-3 border border-slate-700 font-extrabold font-display text-center align-middle text-white uppercase tracking-wider text-xs">
+                                                        <td rowSpan={etapas.length + 1} className="px-2 py-1 border border-slate-700 font-extrabold font-display text-center align-middle text-white uppercase tracking-wider text-[10px]">
                                                             {area}
                                                         </td>
                                                     )}
-                                                    <td className="p-3 border border-slate-700 text-slate-400 font-medium text-xs">{etapa}</td>
+                                                    <td className="px-2 py-1 border border-slate-700 text-slate-400 font-medium text-[10px]">{etapa}</td>
                                                     
-                                                    {portfolioData.allConcessionarias.map((conc: string) => {
+                                                    {[...portfolioData.allConcessionarias].sort().map((conc: string) => {
                                                         const cellData = rowData[conc] || { ucs: 0, mwh: 0 };
                                                         return (
                                                             <React.Fragment key={conc}>
-                                                                <td className="p-2 border border-slate-700 text-center text-slate-300 text-sm font-medium">
+                                                                <td className="px-2 py-1 border border-slate-700 text-center text-slate-300 text-xs font-medium">
                                                                     {cellData.ucs > 0 ? new Intl.NumberFormat('pt-BR').format(cellData.ucs) : '-'}
                                                                 </td>
-                                                                <td className="p-2 border border-slate-700 text-center text-slate-400 text-sm font-medium">
+                                                                <td className="px-2 py-1 border border-slate-700 text-center text-slate-400 text-xs font-medium">
                                                                     {cellData.mwh > 0 ? new Intl.NumberFormat('pt-BR').format(Math.round(cellData.mwh)) : '-'}
                                                                 </td>
                                                             </React.Fragment>
                                                         );
                                                     })}
                                                     
-                                                    <td className="p-2 border border-slate-700 text-center font-bold text-white bg-slate-800 text-sm">
+                                                    <td className="px-2 py-1 border border-slate-700 text-center font-bold text-white bg-slate-800 text-xs">
                                                         {new Intl.NumberFormat('pt-BR').format(totalRow.ucs)}
                                                     </td>
-                                                    <td className="p-2 border border-slate-700 text-center font-bold text-yellow-400 bg-slate-800 text-sm">
+                                                    <td className="px-2 py-1 border border-slate-700 text-center font-bold text-yellow-400 bg-slate-800 text-xs">
                                                         {new Intl.NumberFormat('pt-BR').format(Math.round(totalRow.mwh))}
                                                     </td>
                                                 </tr>
                                             );
                                         })}
                                         <tr key={`${area}-subtotal`} className="bg-blue-900/20 border-y-2 border-slate-600 font-bold">
-                                            <td className="p-2 border border-slate-700 text-right font-display uppercase text-[10px] tracking-wider text-blue-300">Total {area}</td>
-                                            {portfolioData.allConcessionarias.map((conc: string) => {
+                                            <td className="px-2 py-1 border border-slate-700 text-right font-display uppercase text-[10px] tracking-wider text-blue-300">Total {area}</td>
+                                            {[...portfolioData.allConcessionarias].sort().map((conc: string) => {
                                                 const subData = portfolioData.areaTotals[area]?.rows[conc] || { ucs: 0, mwh: 0 };
                                                 return (
                                                     <React.Fragment key={conc}>
-                                                        <td className="p-2 border border-slate-700 text-center text-white text-base">
+                                                        <td className="px-2 py-1 border border-slate-700 text-center text-white text-sm">
                                                             {subData.ucs > 0 ? new Intl.NumberFormat('pt-BR').format(subData.ucs) : '-'}
                                                         </td>
-                                                        <td className="p-2 border border-slate-700 text-center text-yellow-300/80 text-base">
+                                                        <td className="px-2 py-1 border border-slate-700 text-center text-yellow-300/80 text-sm">
                                                             {subData.mwh > 0 ? new Intl.NumberFormat('pt-BR').format(Math.round(subData.mwh)) : '-'}
                                                         </td>
                                                     </React.Fragment>
                                                 );
                                             })}
-                                            <td className="p-2 border border-slate-700 text-center text-white text-lg bg-blue-900/40">
+                                            <td className="px-2 py-1 border border-slate-700 text-center text-white text-sm bg-blue-900/40">
                                                 {new Intl.NumberFormat('pt-BR').format(portfolioData.areaTotals[area]?.totalRow.ucs || 0)}
                                             </td>
-                                            <td className="p-2 border border-slate-700 text-center text-yellow-400 text-lg bg-blue-900/40">
+                                            <td className="px-2 py-1 border border-slate-700 text-center text-yellow-400 text-sm bg-blue-900/40">
                                                 {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.areaTotals[area]?.totalRow.mwh || 0))}
                                             </td>
                                         </tr>
@@ -2039,24 +2088,79 @@ function AdminDashboard() {
                             })}
                             
                             <tr className="bg-slate-800 font-black border-t-4 border-slate-500 shadow-xl">
-                                <td colSpan={2} className="p-4 border border-slate-700 font-display text-right uppercase tracking-widest text-lg text-white">TOTAL GERAL DA CARTEIRA</td>
-                                {portfolioData.allConcessionarias.map((conc: string) => (
+                                <td colSpan={2} className="px-2 py-1 border border-slate-700 font-display text-right uppercase tracking-widest text-sm text-white">TOTAL GERAL</td>
+                                {[...portfolioData.allConcessionarias].sort().map((conc: string) => (
                                     <React.Fragment key={conc}>
-                                        <td className="p-3 border border-slate-700 text-center text-white text-lg">
+                                        <td className="px-2 py-1 border border-slate-700 text-center text-white text-sm">
                                             {new Intl.NumberFormat('pt-BR').format(portfolioData.concessionariaTotals[conc].ucs)}
                                         </td>
-                                        <td className="p-3 border border-slate-700 text-center text-yellow-400 text-lg">
+                                        <td className="px-2 py-1 border border-slate-700 text-center text-yellow-400 text-sm">
                                             {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.concessionariaTotals[conc].mwh))}
                                         </td>
                                     </React.Fragment>
                                 ))}
-                                <td className="p-3 border border-slate-700 text-center text-white text-2xl bg-slate-700">
+                                <td className="px-2 py-1 border border-slate-700 text-center text-white text-base bg-slate-700">
                                     {new Intl.NumberFormat('pt-BR').format(portfolioData.globalTotal.ucs)}
                                 </td>
-                                <td className="p-3 border border-slate-700 text-center text-yellow-400 text-2xl bg-slate-700">
+                                <td className="px-2 py-1 border border-slate-700 text-center text-yellow-400 text-base bg-slate-700">
                                     {new Intl.NumberFormat('pt-BR').format(Math.round(portfolioData.globalTotal.mwh))}
                                 </td>
                             </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* NOVA TABELA DE CONCESSIONÁRIAS COM LOGOS COMPACTA */}
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden mt-6">
+                <div className="p-6 border-b border-slate-800 bg-slate-900/50">
+                    <h2 className="text-xl font-display font-bold text-white flex items-center gap-2"><Briefcase className="text-blue-500" size={24}/> Resumo por Concessionária</h2>
+                    <p className="text-sm text-slate-400">Total de clientes (UCs) e volume operado em cada distribuidora.</p>
+                </div>
+                <div className="overflow-x-auto p-4">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-800/50 text-slate-300 text-xs">
+                                <th className="px-3 py-2 border-b border-slate-700 w-16 text-center font-display font-bold uppercase tracking-wider">Logo</th>
+                                <th className="px-3 py-2 border-b border-slate-700 font-display font-bold uppercase tracking-wider">Concessionária</th>
+                                <th className="px-3 py-2 border-b border-slate-700 font-display font-bold uppercase tracking-wider text-center">UCs</th>
+                                <th className="px-3 py-2 border-b border-slate-700 font-display font-bold uppercase tracking-wider text-center">Volume (MWh)</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                            {[...portfolioData.allConcessionarias]
+                                .sort((a, b) => portfolioData.concessionariaTotals[b].ucs - portfolioData.concessionariaTotals[a].ucs)
+                                .map((conc: string) => {
+                                const stats = portfolioData.concessionariaTotals[conc];
+                                const logo = getConcLogo(conc);
+                                
+                                if (stats.ucs === 0) return null;
+
+                                return (
+                                    <tr key={conc} className="hover:bg-slate-800/30 transition-colors">
+                                        <td className="px-3 py-2 text-center">
+                                            {logo ? (
+                                                <div className="w-10 h-10 bg-white rounded-lg p-1.5 mx-auto flex items-center justify-center shadow-md">
+                                                    <img src={logo} alt={conc} className="max-w-full max-h-full object-contain" />
+                                                </div>
+                                            ) : (
+                                                <div className="w-10 h-10 bg-slate-800 rounded-lg mx-auto flex items-center justify-center shadow-md text-[10px] font-bold text-slate-400 uppercase">
+                                                    {conc.substring(0,3)}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <span className="font-bold text-slate-200 text-sm uppercase">{conc}</span>
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                            <span className="text-sm font-mono font-bold text-white">{new Intl.NumberFormat('pt-BR').format(stats.ucs)}</span>
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                            <span className="text-sm font-mono font-bold text-yellow-400">{new Intl.NumberFormat('pt-BR').format(Math.round(stats.mwh))}</span>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

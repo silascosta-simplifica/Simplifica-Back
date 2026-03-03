@@ -705,9 +705,9 @@ export default function PortalCamila() {
                                 
                                 {/* LINHA 1: KPIS PRINCIPAIS - Layout Repaginado */}
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <Users size={14} className="text-blue-400"/>
+                                            <Users size={14} className="text-blue-400 shrink-0"/>
                                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">UCs Filtradas</p>
                                         </div>
                                         <p className="text-xl lg:text-2xl font-bold font-mono text-white truncate w-full" title={new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}>
@@ -715,9 +715,9 @@ export default function PortalCamila() {
                                         </p>
                                     </div>
                                     
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <Zap size={14} className="text-blue-500"/>
+                                            <Zap size={14} className="text-blue-500 shrink-0"/>
                                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Consumo Real</p>
                                         </div>
                                         <p className="text-xl lg:text-2xl font-bold font-mono text-white truncate w-full" title={Math.round(metrics.consumo).toLocaleString('pt-BR')}>
@@ -725,9 +725,9 @@ export default function PortalCamila() {
                                         </p>
                                     </div>
 
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <Zap size={14} className="text-emerald-500"/>
+                                            <Zap size={14} className="text-emerald-500 shrink-0"/>
                                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Compensação</p>
                                         </div>
                                         <p className="text-xl lg:text-2xl font-bold font-mono text-white truncate w-full" title={Math.round(metrics.compensacao).toLocaleString('pt-BR')}>
@@ -735,9 +735,9 @@ export default function PortalCamila() {
                                         </p>
                                     </div>
 
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <Receipt size={14} className="text-yellow-500"/>
+                                            <Receipt size={14} className="text-yellow-500 shrink-0"/>
                                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Faturamento</p>
                                         </div>
                                         <p className="text-xl lg:text-2xl font-bold font-display text-white truncate w-full" title={formatMoney(metrics.boleto)}>
@@ -745,9 +745,9 @@ export default function PortalCamila() {
                                         </p>
                                     </div>
 
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <PiggyBank size={14} className="text-emerald-400"/>
+                                            <PiggyBank size={14} className="text-emerald-400 shrink-0"/>
                                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Economia Gerada</p>
                                         </div>
                                         <p className="text-xl lg:text-2xl font-bold font-display text-emerald-400 truncate w-full" title={formatMoney(metrics.economia)}>
@@ -755,9 +755,9 @@ export default function PortalCamila() {
                                         </p>
                                     </div>
 
-                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center">
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                         <div className="flex items-center gap-1.5">
-                                            <Wallet size={14} className="text-cyan-400"/>
+                                            <Wallet size={14} className="text-cyan-400 shrink-0"/>
                                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Saldo (Atual)</p>
                                         </div>
                                         <p className="text-xl lg:text-2xl font-bold font-mono text-cyan-400 truncate w-full" title={Math.round(metrics.saldoAtual).toLocaleString('pt-BR')}>
@@ -935,7 +935,7 @@ export default function PortalCamila() {
                                 <table className="w-full text-sm text-left whitespace-nowrap">
                                     <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold border-b border-slate-800">
                                         <tr>
-                                            <th className="px-5 py-4">UC / Cliente</th>
+                                            <th className="px-5 py-4 min-w-[280px]">UC / Cliente</th>
                                             {colunasAtivas.includes('Ações (Links)') && <th className="px-5 py-4 text-center">Ações (Links)</th>}
                                             
                                             {colunasAtivas.includes('Ciclo') && <th className="px-5 py-4 text-center text-purple-300">Ciclo Atual</th>}
@@ -977,7 +977,7 @@ export default function PortalCamila() {
                                                 <tr key={chaveLinha} className="hover:bg-slate-800/40 transition-colors">
                                                     <td className="px-5 py-3">
                                                         <div className="font-mono text-slate-200 font-bold">{row.uc}</div>
-                                                        <div className="text-xs text-slate-500 truncate max-w-[200px]" title={row.nome_cliente}>
+                                                        <div className="text-xs text-slate-500 truncate max-w-[350px]" title={row.nome_cliente}>
                                                             {rdLink ? (
                                                                 <a href={rdLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline transition-colors flex items-center gap-1 group" title="Abrir negócio no RD Station CRM">
                                                                     <span className="truncate">{row.nome_cliente || 'Sem Nome'}</span>
@@ -992,24 +992,54 @@ export default function PortalCamila() {
                                                     {colunasAtivas.includes('Ações (Links)') && (
                                                         <td className="px-5 py-3 text-center">
                                                             <div className="flex items-center justify-center gap-2">
+                                                                {/* BOTÃO FATURA CONCESSIONÁRIA */}
                                                                 {row.fonte_dados === 'UNIFICA' ? (
-                                                                    <button onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'FATURA', `btn_fat_${chaveLinha}`)} disabled={loadingDownloads[`btn_fat_${chaveLinha}`]} title="Fatura da Concessionária (Plataforma Gestão)" className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors disabled:opacity-50">
+                                                                    <button 
+                                                                        onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'FATURA', `btn_fat_${chaveLinha}`)}
+                                                                        disabled={loadingDownloads[`btn_fat_${chaveLinha}`]}
+                                                                        title="Fatura da Concessionária (Plataforma Gestão)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors disabled:opacity-50"
+                                                                    >
                                                                         {loadingDownloads[`btn_fat_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16} />}
                                                                     </button>
                                                                 ) : linkBoletoLumiDireto ? (
-                                                                    <a href={linkBoletoLumiDireto} target="_blank" rel="noopener noreferrer" title="Fatura da Concessionária (Lumi)" className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors flex items-center justify-center"><FileDown size={16} /></a>
+                                                                    <a 
+                                                                        href={linkBoletoLumiDireto} 
+                                                                        target="_blank" rel="noopener noreferrer" 
+                                                                        title="Fatura da Concessionária (Lumi)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors flex items-center justify-center"
+                                                                    >
+                                                                        <FileDown size={16} />
+                                                                    </a>
                                                                 ) : (
-                                                                    <div title="Não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed"><FileDown size={16} /></div>
+                                                                    <div title="Fatura da Concessionária não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed">
+                                                                        <FileDown size={16} />
+                                                                    </div>
                                                                 )}
                                                                 
+                                                                {/* BOTÃO BOLETO SIMPLIFICA */}
                                                                 {row.fonte_dados === 'UNIFICA' ? (
-                                                                    <button onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'BOLETO', `btn_bol_${chaveLinha}`)} disabled={loadingDownloads[`btn_bol_${chaveLinha}`]} title="Boleto Simplifica (Plataforma Gestão)" className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50">
+                                                                    <button 
+                                                                        onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'BOLETO', `btn_bol_${chaveLinha}`)}
+                                                                        disabled={loadingDownloads[`btn_bol_${chaveLinha}`]}
+                                                                        title="Boleto Simplifica (Plataforma Gestão)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50"
+                                                                    >
                                                                         {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
                                                                     </button>
                                                                 ) : linkBoletoLumiDireto ? (
-                                                                    <a href={linkBoletoLumiDireto} target="_blank" rel="noopener noreferrer" title="Boleto Simplifica (Lumi)" className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors flex items-center justify-center"><Receipt size={16} /></a>
+                                                                    <a 
+                                                                        href={linkBoletoLumiDireto} 
+                                                                        target="_blank" rel="noopener noreferrer" 
+                                                                        title="Boleto Simplifica (Lumi)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors flex items-center justify-center"
+                                                                    >
+                                                                        <Receipt size={16} />
+                                                                    </a>
                                                                 ) : (
-                                                                    <div title="Não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed"><Receipt size={16} /></div>
+                                                                    <div title="Link de cobrança não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed">
+                                                                        <Receipt size={16} />
+                                                                    </div>
                                                                 )}
                                                             </div>
                                                         </td>
@@ -1133,9 +1163,9 @@ export default function PortalCamila() {
 
                         {/* O RELATÓRIO EM SI */}
                         {relatorioData ? (
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-2 w-full max-w-[900px] mx-auto print:w-full print:max-w-full print:text-white print:bg-slate-900">
+                            <div className="bg-slate-900 print:bg-[#0a0a0a] border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-2 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full print:text-white page-break-inside-avoid">
                                 
-                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-2 mb-6 print:mb-3 print-break-avoid">
+                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-3 mb-6 print:mb-5">
                                     <div>
                                         <h1 className="text-3xl print:text-2xl font-display font-bold text-white mb-1">{relatorioData.infoCadastral.nome_cliente}</h1>
                                         <p className="text-slate-400 font-mono text-sm print:text-xs">UC: {relatorioData.infoCadastral.uc}</p>
@@ -1147,22 +1177,22 @@ export default function PortalCamila() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-2 mb-8 print:mb-3 print-break-avoid">
-                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-3 mb-8 print:mb-6">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Concessionária</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">{relatorioData.infoCadastral.concessionaria}</p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Cliente Desde</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">{toDateBR(relatorioData.infoCadastral.data_ganho) !== '-' ? toDateBR(relatorioData.infoCadastral.data_ganho) : 'Não informado'}</p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Eficiência Média</p>
                                         <p className={`text-sm print:text-xs font-bold ${relatorioData.eficienciaMedia >= 90 ? 'text-emerald-400' : relatorioData.eficienciaMedia >= 70 ? 'text-yellow-400' : 'text-rose-400'}`}>
                                             {relatorioData.eficienciaMedia > 0 ? relatorioData.eficienciaMedia.toFixed(1) + '%' : 'N/D'}
                                         </p>
                                     </div>
-                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800">
+                                    <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Consumo Total</p>
                                         <p className="text-sm print:text-xs font-bold text-slate-200">
                                             {Math.round(relatorioData.totalConsumo).toLocaleString('pt-BR')} kWh
@@ -1170,8 +1200,8 @@ export default function PortalCamila() {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row gap-6 print:gap-4 mb-8 print:mb-3 print-break-avoid">
-                                    <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
+                                <div className="flex flex-col sm:flex-row gap-6 print:gap-5 mb-8 print:mb-6 page-break-inside-avoid">
+                                    <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 print:border-emerald-800/50 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <PiggyBank size={32} className="text-emerald-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
                                         <p className="text-xs print:text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Economia Total Acumulada</p>
                                         <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{formatMoney(relatorioData.totalEco)}</h2>
@@ -1182,14 +1212,14 @@ export default function PortalCamila() {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex-1 bg-blue-900/10 border border-blue-800/30 p-6 print:p-4 rounded-2xl flex items-center justify-center flex-col text-center">
+                                    <div className="flex-1 bg-blue-900/10 border border-blue-800/30 print:border-blue-800/50 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <Zap size={32} className="text-blue-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
                                         <p className="text-xs print:text-[11px] font-bold text-blue-500 uppercase tracking-widest mb-1">Total de Energia Compensada</p>
                                         <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{Math.round(relatorioData.totalComp).toLocaleString('pt-BR')} <span className="text-lg print:text-base text-blue-400">kWh</span></h2>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-2 mb-10 print:mb-6 print-break-avoid">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-3 mb-10 print:mb-8 page-break-inside-avoid">
                                     <div className="bg-slate-900 p-4 print:p-3 border border-slate-700 rounded-xl flex justify-between items-center">
                                         <div className="flex items-center gap-3 print:gap-2">
                                             <div className="bg-rose-500/10 p-2 print:p-1.5 rounded-full"><TrendingUp size={18} className="text-rose-400 print:h-5 print:w-5"/></div>
@@ -1206,13 +1236,11 @@ export default function PortalCamila() {
                                     </div>
                                 </div>
 
-                                <div className="mb-10 print:mb-30 print-break-avoid relative z-0">
-                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-6 print:mb-2 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (Últimos 12 meses)</h3>
-                                    
-                                    {/* Ajuste de Margem e Altura Crítico para Impressão */}
-                                    <div className="w-full h-[300px] print:h-[220px] print:pr-4 relative">
-                                        <ResponsiveContainer width="99%" height="100%">
-                                            <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 30, left: -10, bottom: 5 }} barGap={2}>
+                                <div className="mb-10 print:mb-12 page-break-inside-avoid">
+                                    <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-6 print:mb-4 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (Últimos 12 meses)</h3>
+                                    <div className="w-full h-[300px] print:h-[300px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={relatorioData.chartData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }} barGap={2}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                                 <XAxis dataKey="mes" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickMargin={10}/>
                                                 <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false}/>
@@ -1223,7 +1251,7 @@ export default function PortalCamila() {
                                     </div>
                                 </div>
 
-                                <div className="print-break-avoid pt-4 print:pt-[42px] relative z-10">
+                                <div className="page-break-inside-avoid pt-4 print:pt-8">
                                     <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-4 print:mb-3 border-b border-slate-800 pb-2">Extrato das Últimas Faturas</h3>
                                     <table className="w-full text-sm print:text-xs text-left">
                                         <thead className="text-xs print:text-[10px] uppercase text-slate-500 border-b border-slate-800">
