@@ -33,41 +33,40 @@ CAMPOS_LUMI = [
     "uc", "nome", "mes_referencia", "consumo_total_faturado_qt", "valor_total_fatura", "drive_id",
     "payments.energia_compensada", "payments.economia", "payments.status_cobranca_asaas",
     "payments.vencimento", "payments.remuneracao_geracao", "payments.sent_at",
-    "payments.asaas_payment_id", # CAMPO PARA O PIX DO ASAAS
-    "creditos_estoque_tot" # <--- NOVO CAMPO ADICIONADO
+    "payments.asaas_payment_id",
+    "creditos_estoque_tot"
 ]
 
-# Conexão com Banco
-engine = create_engine(DB_URL)
+# Conexão com Banco - Adicionado pool_pre_ping para evitar conexões mortas
+engine = create_engine(DB_URL, pool_pre_ping=True)
 
 # --- FUNÇÕES AUXILIARES ---
 
 def login_lumi(email, senha):
-    """Faz login e retorna o token JWT"""
+    """Faz login e retorna o token JWT com timeout de segurança"""
     try:
         if not email or not senha: return None
-        resp = requests.post(f"{LUMI_URL}/login", json={"email": email, "senha": senha})
+        # Timeout de 30s evita que o GitHub Actions trave se a API não responder
+        resp = requests.post(f"{LUMI_URL}/login", json={"email": email, "senha": senha}, timeout=30)
         return resp.json().get("token") if resp.status_code == 200 else None
-    except: return None
+    except Exception as e:
+        print(f"❌ Erro de conexão no login: {e}", flush=True)
+        return None
 
 def limpar_numero(val):
-    """Converte moeda/texto para float (ex: 'R$ 1.000,00' -> 1000.00)"""
     if val is None or val == "": return 0.0
     if isinstance(val, (int, float)): return float(val)
     try:
-        # Remove R$, troca ponto por nada e vírgula por ponto
         return float(str(val).replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".").strip())
     except: return 0.0
 
 def tratar_data(val):
-    """Formata data para YYYY-MM-DD ou retorna None se vazio"""
     if not val: return None
     try:
         return str(val).split("T")[0]
     except: return None
 
 def processar_fatura(item, nome_conta):
-    """Transforma o JSON da API no formato do nosso Banco de Dados"""
     return {
         "uc": str(item.get("uc", "")).strip(),
         "mes_referencia": tratar_data(item.get("mes_referencia")),
@@ -78,38 +77,28 @@ def processar_fatura(item, nome_conta):
         "economia_total": limpar_numero(item.get("economia")),
         "remuneracao_geracao": limpar_numero(item.get("remuneracao_geracao")), 
         "data_envio": tratar_data(item.get("sent_at")), 
-        "data_emissao": tratar_data(item.get("data_emissao")),
         "status_pagamento": item.get("status_cobranca_asaas"),
         "vencimento": tratar_data(item.get("vencimento")),
         "link_boleto": item.get("drive_id"), 
         "asaas_id": item.get("asaas_payment_id"),
-        "creditos_estoque_tot": limpar_numero(item.get("creditos_estoque_tot")), # <--- NOVO CAMPO SENDO LIDO
+        "creditos_estoque_tot": limpar_numero(item.get("creditos_estoque_tot")),
         "updated_at": datetime.now(),
         "origem_conta": nome_conta 
     }
 
 def salvar_em_lotes(lista_faturas, nome_conta):
-    """
-    TURBO MODE 🚀: Salva tudo de uma vez usando Bulk Insert.
-    Muito mais rápido do que salvar linha por linha.
-    """
     if not lista_faturas: return
     
     dados_prontos = []
-    
-    # 1. Prepara os dados
     for item in lista_faturas:
         try:
             fat = processar_fatura(item, nome_conta)
-            # Só salva se tiver UC e Mês (Chave Primária)
             if fat["uc"] and fat["mes_referencia"]: 
                 dados_prontos.append(fat)
-        except Exception as e:
-            pass # Ignora fatura com erro de formatação
+        except: pass
 
     if not dados_prontos: return
 
-    # 2. Query Otimizada (SQLAlchemy Core) com a nova coluna
     stmt = text("""
         INSERT INTO raw_lumi (
             uc, mes_referencia, nome_cliente, consumo_kwh, 
@@ -139,71 +128,69 @@ def salvar_em_lotes(lista_faturas, nome_conta):
             creditos_estoque_tot = EXCLUDED.creditos_estoque_tot;
     """)
 
-    # 3. Execução em Transação Única
     try:
         with engine.begin() as conn: 
             conn.execute(stmt, dados_prontos)
-        print(f"    ✅ [{nome_conta}] Lote salvo: {len(dados_prontos)} registros inseridos/atualizados.", end='\r')
+        # Flush=True garante que o log apareça no GitHub na hora
+        print(f"    ✅ [{nome_conta}] Lote salvo: {len(dados_prontos)} registros.", flush=True)
     except Exception as e:
-        print(f"\n    ❌ Erro ao salvar lote no banco: {e}")
+        print(f"    ❌ Erro ao salvar no banco: {e}", flush=True)
 
 def executar_sync_lumi():
-    print("🚀 Iniciando Sincronização Turbo Lumi...")
+    print("🚀 Iniciando Sincronização Turbo Lumi...", flush=True)
     
     for conta in CONTAS:
         if not conta["email"] or not conta["senha"]:
-            print(f"⚠️ Pulei conta {conta['nome']} (sem credenciais no .env)")
+            print(f"⚠️ Pulei conta {conta['nome']} (sem credenciais)", flush=True)
             continue
 
-        print(f"\n🔑 Logando na conta: {conta['nome']} ({conta['email']})...")
+        print(f"\n🔑 Logando: {conta['nome']}...", flush=True)
         token = login_lumi(conta["email"], conta["senha"])
         
         if not token: 
-            print(f"❌ Falha no login da conta {conta['nome']}")
+            print(f"❌ Falha no login da conta {conta['nome']}. Verifique credenciais ou bloqueio de IP.", flush=True)
             continue
 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         full_url = f"{LUMI_URL}{LUMI_ENDPOINT}"
         
-        # BUSCA DESDE 2023 ATÉ O ANO ATUAL
         anos = ["2023-01-01", "2024-01-01", "2025-01-01", "2026-01-01"]
 
         for ano_inicio in anos:
             ano_fim = ano_inicio.replace("-01-01", "-12-31")
-            print(f"    📅 {conta['nome']} - Buscando: {ano_inicio} a {ano_fim}...")
+            print(f"    📅 {conta['nome']} - Período: {ano_inicio} a {ano_fim}...", flush=True)
             
             params = {"inicio": ano_inicio, "fim": ano_fim, "campo": CAMPOS_LUMI}
 
             try:
                 resp = requests.get(full_url, headers=headers, params=params, timeout=120)
-                if resp.status_code != 200: continue
+                if resp.status_code != 200: 
+                    print(f"    ⚠️ Erro API ({resp.status_code}) para este período.", flush=True)
+                    continue
                 
                 dados = resp.json()
                 lista = []
                 
                 if isinstance(dados, list): lista = dados
                 elif isinstance(dados, dict):
-                     lista = dados.get("data", [])
-                     if isinstance(lista, dict) and "rows" in lista: lista = lista["rows"]
+                    lista = dados.get("data", [])
+                    if isinstance(lista, dict) and "rows" in lista: lista = lista["rows"]
                 
                 if not lista: 
                     continue
                 
                 salvar_em_lotes(lista, conta["nome"])
 
-            except Exception as e: print(f"❌ Erro requisição {conta['nome']}: {e}")
+            except Exception as e: 
+                print(f"    ❌ Erro na requisição: {e}", flush=True)
 
-    # =========================================================
-    # ATUALIZA A "FOTOGRAFIA" DA VIEW MATERIALIZADA
-    # =========================================================
-    print("\n🔄 Atualizando a View Materializada no Banco de Dados...")
+    print("\n🔄 Atualizando View Materializada...", flush=True)
     try:
-        stmt = text("REFRESH MATERIALIZED VIEW analytics_materializada;")
         with engine.begin() as conn:
-            conn.execute(stmt)
-        print("✅ View atualizada com sucesso! Todos os IDs e cálculos estão disponíveis.")
+            conn.execute(text("REFRESH MATERIALIZED VIEW analytics_materializada;"))
+        print("✅ Tudo pronto!", flush=True)
     except Exception as e:
-        print(f"❌ Erro ao atualizar a View: {e}")
+        print(f"❌ Erro na View: {e}", flush=True)
 
 if __name__ == "__main__":
     executar_sync_lumi()
