@@ -127,7 +127,6 @@ export default function PortalParceiro() {
         return () => document.removeEventListener('mousedown', handleClickOutsideDropdown);
     }, []);
 
-    // Busca a comissão da aba "Base Silas"
     useEffect(() => {
         const fetchPlanilhaComissoes = async () => {
             try {
@@ -204,15 +203,17 @@ export default function PortalParceiro() {
         setLoadingDownloads(prev => ({ ...prev, [id]: isLoading }));
     };
 
-    // Download da Gestão usa Edge Function para driblar CORS
     const handleDownloadGestao = async (uc: string, mesRef: string, type: 'FATURA'|'BOLETO', buttonId: string) => {
         if (!uc || !mesRef) return;
         setBtnLoading(buttonId, true);
         
         try {
-            const parts = mesRef.split('/');
-            if (parts.length !== 2) throw new Error("Referência de data inválida.");
-            const refYm = `${parts[1]}-${parts[0]}`;
+            const strMesRef = String(mesRef);
+            const parts = strMesRef.split('/');
+            let refYm = strMesRef;
+            if (parts.length === 2) {
+                refYm = `${parts[1]}-${parts[0]}`;
+            }
 
             const { data, error } = await supabase.functions.invoke('gestao-docs', {
                 body: { uc: uc, mes_ref: refYm, tipo: type }
@@ -225,7 +226,7 @@ export default function PortalParceiro() {
             window.open(data.url, '_blank');
             
         } catch (err: any) {
-            alert(`Falha ao buscar ${type}. Verifique se a Edge Function 'gestao-docs' está rodando na nuvem. Detalhe: ${err.message}`);
+            alert(`Falha ao buscar ${type}. Detalhe: ${err.message}`);
         } finally {
             setBtnLoading(buttonId, false);
         }
@@ -281,7 +282,7 @@ export default function PortalParceiro() {
 
         for (let i = 0; i < itemsToProcess.length; i++) {
             const row = itemsToProcess[i];
-            const chave = row.id_chave_composta;
+            const chave = row.id_chave_composta || `${row.uc}-${row.mes_referencia}`;
             
             setCodigosAsaas(prev => ({ ...prev, [chave]: { loading: true } }));
 
@@ -319,12 +320,27 @@ export default function PortalParceiro() {
 
     const formatMoney = (val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
     const toDateBR = (d: any) => { if (!d) return '-'; try { return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'UTC' }); } catch { return '-'; } };
-    const formatMesRef = (m: string) => { if (!m) return '-'; const parts = m.split('-'); if (parts.length >= 2) return `${parts[1]}/${parts[0]}`; return m; };
+    
+    // CORREÇÃO: Blindagem para evitar crash com .split() em valores que não são string
+    const formatMesRef = (m: any) => { 
+        if (!m) return '-'; 
+        const strM = String(m);
+        const parts = strM.split('-'); 
+        if (parts.length >= 2) return `${parts[1]}/${parts[0]}`; 
+        return strM; 
+    };
 
-    const getSortableDate = (mesRef: string) => {
+    // CORREÇÃO: Função de ordenação agora consegue interpretar o formato YYYY-MM para ordenação correta
+    const getSortableDate = (mesRef: any) => {
         if (!mesRef || mesRef === 'N/D' || mesRef === '-') return 0;
-        const parts = mesRef.split('/');
-        if (parts.length === 2) return parseInt(parts[1]) * 100 + parseInt(parts[0]); 
+        const str = String(mesRef);
+        if (str.includes('/')) {
+            const parts = str.split('/');
+            if (parts.length === 2) return parseInt(parts[1]) * 100 + parseInt(parts[0]); 
+        } else if (str.includes('-')) {
+            const parts = str.split('-');
+            if (parts.length >= 2) return parseInt(parts[0]) * 100 + parseInt(parts[1]); 
+        }
         return 0;
     };
 
@@ -371,8 +387,9 @@ export default function PortalParceiro() {
             if (d.fonte_dados === 'RD') return false; 
 
             if (!d.mes_referencia || d.mes_referencia === 'N/D' || d.mes_referencia === '-') return true; 
-            if (d.mes_referencia.includes('-')) {
-                const parts = String(d.mes_referencia).split('-');
+            const strMes = String(d.mes_referencia);
+            if (strMes.includes('-')) {
+                const parts = strMes.split('-');
                 if (parts.length >= 2) {
                     const anoRef = Number(parts[0]);
                     const mesRef = Number(parts[1]);
@@ -380,8 +397,8 @@ export default function PortalParceiro() {
                     if (anoRef === anoAtual && mesRef > mesAtual) return false; 
                 }
             } 
-            else if (d.mes_referencia.includes('/')) {
-                const parts = String(d.mes_referencia).split('/');
+            else if (strMes.includes('/')) {
+                const parts = strMes.split('/');
                 if (parts.length === 2) {
                     const mesRef = Number(parts[0]);
                     const anoRef = Number(parts[1]);
@@ -394,8 +411,8 @@ export default function PortalParceiro() {
 
         let finalData = isAdmin ? dadosTratados : dadosTratados.filter((d: any) => d.quem_indicou === parceiroLogado);
         
-        // Ordenamos por data decrescente (mais nova pra mais velha) para o reduce pegar sempre o saldo mais recente
-        return finalData.sort((a: any, b: any) => getSortableDate(b.mes_referencia) - getSortableDate(a.mes_referencia));
+        // CORREÇÃO: Evitar mutação direta do array usando o spread operator [...finalData]
+        return [...finalData].sort((a: any, b: any) => getSortableDate(b.mes_referencia) - getSortableDate(a.mes_referencia));
     }, [rawData, isAdmin, parceiroLogado]);
 
     const ucsUnicas = useMemo(() => {
@@ -423,7 +440,6 @@ export default function PortalParceiro() {
     const metrics = useMemo(() => {
         const uniqueUcs = new Set();
         const totals = filteredData.reduce((acc, row) => {
-            // Se a UC ainda não apareceu (e estamos varrendo do mês mais novo pro mais velho), o saldo dela é o atual
             if (!uniqueUcs.has(row.uc)) {
                 uniqueUcs.add(row.uc);
                 acc.saldoAtual += (row.saldo || 0);
@@ -555,9 +571,11 @@ export default function PortalParceiro() {
         if (!relatorioUc) return null;
         
         const historico = data.filter(d => d.uc === relatorioUc).sort((a:any, b:any) => {
-            const [mA, yA] = (a.mes_referencia || '0/0').split('/'); 
-            const [mB, yB] = (b.mes_referencia || '0/0').split('/');
-            return new Date(yA, mA - 1).getTime() - new Date(yB, mB - 1).getTime();
+            const strMesA = String(a.mes_referencia || '0/0');
+            const strMesB = String(b.mes_referencia || '0/0');
+            const [mA, yA] = strMesA.includes('/') ? strMesA.split('/') : strMesA.split('-').reverse(); 
+            const [mB, yB] = strMesB.includes('/') ? strMesB.split('/') : strMesB.split('-').reverse();
+            return new Date(Number(yA), Number(mA) - 1).getTime() - new Date(Number(yB), Number(mB) - 1).getTime();
         });
 
         if (historico.length === 0) return null;
@@ -614,7 +632,6 @@ export default function PortalParceiro() {
         
         const ultimasFaturas = [...historico].reverse().slice(0, 6);
         
-        // LIMITA O GRÁFICO AOS ÚLTIMOS 12 MESES
         chartData = chartData.slice(-12);
 
         return {
@@ -654,7 +671,6 @@ export default function PortalParceiro() {
     return (
         <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col">
             
-            {/* CSS BLINDADO PARA IMPRESSÃO EM A4 (FUNDO ESCURO NEUTRO E ENQUADRAMENTO VERTICAL) */}
             {activeTab === 'relatorio' && (
                 <style>
                     {`
@@ -695,7 +711,6 @@ export default function PortalParceiro() {
                 </style>
             )}
 
-            {/* CABEÇALHO (Oculto na impressão) */}
             <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center sticky top-0 z-40 print:hidden">
                 <div className="flex items-center gap-4">
                     <img src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" alt="Simplifica" className="h-8" />
@@ -722,7 +737,6 @@ export default function PortalParceiro() {
 
             <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto print:p-0 print:m-0 print:block">
                 
-                {/* ABA 1: CARTEIRA */}
                 {activeTab === 'carteira' && (
                     <div className="print:hidden space-y-6">
                         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 animate-in fade-in zoom-in duration-300">
@@ -894,7 +908,8 @@ export default function PortalParceiro() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800/50">
-                                        {paginatedData.map((row) => {
+                                        {/* CORREÇÃO AQUI: A key do map foi alterada para forçar renderizações únicas sempre que o filtro atuar */}
+                                        {paginatedData.map((row, index) => {
                                             const badge = getPaymentBadge(row.status);
                                             const isPago = badge.text === 'Pago';
                                             const isAlexandria = row.quem_indicou === 'Alexandria - LEX';
@@ -911,7 +926,7 @@ export default function PortalParceiro() {
                                                 : null;
 
                                             return (
-                                                <tr key={chaveLinha} className="hover:bg-slate-800/40 transition-colors whitespace-nowrap">
+                                                <tr key={`${chaveLinha}-${index}`} className="hover:bg-slate-800/40 transition-colors whitespace-nowrap">
                                                     <td className="px-5 py-3 text-left">
                                                         <div className="font-mono text-slate-200 font-bold">{row.uc}</div>
                                                         <div className="text-xs text-slate-500 whitespace-normal max-w-[350px] leading-tight mt-0.5" title={row.nome_cliente}>
@@ -1082,7 +1097,7 @@ export default function PortalParceiro() {
                                                 </tr>
                                             )
                                         })}
-                                        {paginatedData.length === 0 && <tr><td colSpan={20} className="text-center py-12 text-slate-500">Nenhum dado encontrado.</td></tr>}
+                                        {paginatedData.length === 0 && <tr><td colSpan={25} className="text-center py-12 text-slate-500">Nenhum dado encontrado com os filtros atuais.</td></tr>}
                                     </tbody>
                                 </table>
                             </div>
@@ -1097,7 +1112,7 @@ export default function PortalParceiro() {
                     </div>
                 )}
 
-                {/* --- ABA 2: RELATÓRIO DO CLIENTE (PRINT-FRIENDLY A4) --- */}
+                {/* ABA 2: RELATÓRIO DO CLIENTE (PRINT-FRIENDLY A4) */}
                 {activeTab === 'relatorio' && (
                     <div id="relatorio-print-container" className="flex flex-col gap-6 w-full mx-auto print:max-w-[210mm] page-break-inside-avoid">
                         {/* CONTROLES DE IMPRESSÃO */}

@@ -11,7 +11,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 
 // =========================================================================
-// FUNÇÕES UTILITÁRIAS
+// FUNÇÕES UTILITÁRIAS (COM BLINDAGEM)
 // =========================================================================
 const formatMoney = (val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
 
@@ -21,17 +21,24 @@ const toDateBR = (d: any) => {
     catch { return '-'; } 
 };
 
-const formatMesRef = (m: string) => { 
+const formatMesRef = (m: any) => { 
     if (!m || m === 'N/D' || m === '-') return '-'; 
-    const parts = m.split('-'); 
+    const strM = String(m);
+    const parts = strM.split('-'); 
     if (parts.length >= 2) return `${parts[1]}/${parts[0]}`; 
-    return m; 
+    return strM; 
 };
 
-const getSortableDate = (mesRef: string) => {
+const getSortableDate = (mesRef: any) => {
     if (!mesRef || mesRef === 'N/D' || mesRef === '-') return 0;
-    const parts = mesRef.split('/');
-    if (parts.length === 2) return parseInt(parts[1]) * 100 + parseInt(parts[0]); 
+    const str = String(mesRef);
+    if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length === 2) return parseInt(parts[1]) * 100 + parseInt(parts[0]); 
+    } else if (str.includes('-')) {
+        const parts = str.split('-');
+        if (parts.length >= 2) return parseInt(parts[0]) * 100 + parseInt(parts[1]); 
+    }
     return 0;
 };
 
@@ -123,12 +130,10 @@ export default function PortalCamila() {
     const navigate = useNavigate();
     const isCamilaLogged = localStorage.getItem('@Simplifica:camilaLogado');
 
-    // Puxando crmData também para injetar os links
     const { data: rawData, crmData, loading: analyticsLoading } = useAnalytics();
     
     const [activeTab, setActiveTab] = useState<'carteira' | 'relatorio'>('carteira');
 
-    // Estados dos Filtros Principais
     const [busca, setBusca] = useState('');
     const [filtroConc, setFiltroConc] = useState<string[]>([]);
     const [filtroMes, setFiltroMes] = useState<string[]>([]);
@@ -144,7 +149,6 @@ export default function PortalCamila() {
 
     const [loadingDownloads, setLoadingDownloads] = useState<Record<string, boolean>>({});
 
-    // Estados do Relatório
     const [relatorioUc, setRelatorioUc] = useState<string>('');
     const [buscaRelatorio, setBuscaRelatorio] = useState('');
     const [showUcDropdown, setShowUcDropdown] = useState(false);
@@ -171,7 +175,6 @@ export default function PortalCamila() {
         navigate('/login-camila');
     };
 
-    // --- LÓGICA DE DOWNLOAD (UNIFICA E LUMI) ---
     const setBtnLoading = (id: string, isLoading: boolean) => {
         setLoadingDownloads(prev => ({ ...prev, [id]: isLoading }));
     };
@@ -183,8 +186,12 @@ export default function PortalCamila() {
         }
         setBtnLoading(buttonId, true);
         try {
-            const parts = mesRef.split('/');
-            const refYm = `${parts[1]}-${parts[0]}`;
+            const strMesRef = String(mesRef);
+            const parts = strMesRef.split('/');
+            let refYm = strMesRef;
+            if (parts.length === 2) {
+                refYm = `${parts[1]}-${parts[0]}`;
+            }
             
             const { data, error } = await supabase.functions.invoke('gestao-docs', {
                 body: { uc: uc, mes_ref: refYm, tipo: type }
@@ -262,7 +269,6 @@ export default function PortalCamila() {
             let dataPrimeiraEconomia: string | null = null;
             let jaTevePrimeiroFaturamento = false;
 
-            // Para achar primeira economia tem que iterar do mais antigo pro mais recente
             const grupoUcReverse = [...grupoUc].reverse();
             for (const row of grupoUcReverse) {
                 const statusNormalizado = getPaymentBadge(row.status).text;
@@ -279,6 +285,10 @@ export default function PortalCamila() {
 
                 const statusNormalizado = getPaymentBadge(row.status).text;
                 const isValido = statusNormalizado !== '-' && row.status !== 'Em análise';
+                
+                // CORREÇÃO: Validando a etapa do CRM para o 1º Faturamento
+                const etapaNorm = String(row.objetivo_etapa || '').toUpperCase();
+                const isEtapaValidaParaPrimeiro = etapaNorm === 'PRÉ-PROTOCOLO' || etapaNorm === 'PROTOCOLADOS' || etapaNorm === 'PROTOCOLADO';
 
                 let ciclo = "Recorrente";
 
@@ -287,7 +297,12 @@ export default function PortalCamila() {
                 } else if (!isValido) {
                     ciclo = "Em análise";
                 } else if (row.compensacao_kwh > 0 && isValido && !jaTevePrimeiroFaturamento) {
-                    ciclo = "Primeiro Faturamento";
+                    // Só marca como "Primeiro Faturamento" se ainda estiver na etapa inicial do CRM
+                    if (isEtapaValidaParaPrimeiro) {
+                        ciclo = "Primeiro Faturamento";
+                    } else {
+                        ciclo = "Recorrente";
+                    }
                     jaTevePrimeiroFaturamento = true;
                 }
 
@@ -296,17 +311,15 @@ export default function PortalCamila() {
             });
         });
 
-        return dadosComCiclo.sort((a, b) => getSortableDate(b.mes_referencia) - getSortableDate(a.mes_referencia));
+        return [...dadosComCiclo].sort((a, b) => getSortableDate(b.mes_referencia) - getSortableDate(a.mes_referencia));
     }, [rawData, crmData]);
 
-    // Lógica da Jornada do Cliente
     const jornadaMetrics = useMemo(() => {
         let countGanhoProt = 0, sumGanhoProt = 0;
         let countProtEco = 0, sumProtEco = 0;
         let countEcoFat = 0, sumEcoFat = 0;
 
         const ucsProcessadas = new Set();
-
         const dataForJornada = data.filter(item => filtroConc.length === 0 || filtroConc.includes(item.concessionaria));
 
         dataForJornada.forEach(row => {
@@ -333,7 +346,7 @@ export default function PortalCamila() {
             }
 
             if (dtEco) {
-                sumEcoFat += 31; // Estimativa padrão
+                sumEcoFat += 31;
                 countEcoFat++;
             }
         });
@@ -345,14 +358,13 @@ export default function PortalCamila() {
         };
     }, [data, filtroConc]);
 
-    // Lógica do Churn Rate
     const churnMetrics = useMemo(() => {
         const ucsAtivas = new Set();
         const ucsCanceladas = new Set();
         const motivos: Record<string, { ucs: number, mwh: number }> = {};
 
         const dataForChurn = data.filter(item => {
-            const matchMes = filtroMes.length === 0 || filtroMes.includes(item.mes_referencia);
+            const matchMes = filtroMes.length === 0 || filtroMes.includes(formatMesRef(item.mes_referencia));
             const matchConc = filtroConc.length === 0 || filtroConc.includes(item.concessionaria);
             return matchMes && matchConc;
         });
@@ -383,14 +395,13 @@ export default function PortalCamila() {
         return { churnRate, listaMotivos, totalCancelados };
     }, [data, filtroMes, filtroConc]);
 
-    // FILTRO DINÂMICO DA TABELA
     const filteredData = useMemo(() => {
         return data.filter(item => {
             const s = busca.toLowerCase();
             const matchBusca = !s || (item.uc?.toLowerCase().includes(s)) || (item.nome_cliente?.toLowerCase().includes(s));
             const matchEtapa = filtroEtapa.length === 0 || filtroEtapa.includes(item.objetivo_etapa);
             const matchConc = filtroConc.length === 0 || filtroConc.includes(item.concessionaria);
-            const matchMes = filtroMes.length === 0 || filtroMes.includes(item.mes_referencia);
+            const matchMes = filtroMes.length === 0 || filtroMes.includes(formatMesRef(item.mes_referencia));
             const matchStatus = filtroStatus.length === 0 || filtroStatus.includes(getPaymentBadge(item.status).text);
             const matchCiclo = filtroCiclo.length === 0 || filtroCiclo.includes(item.ciclo);
 
@@ -398,14 +409,12 @@ export default function PortalCamila() {
         });
     }, [data, busca, filtroEtapa, filtroConc, filtroMes, filtroStatus, filtroCiclo]);
 
-    // MÉTRICAS DO TOPO E ATALHOS
     const metrics = useMemo(() => {
         const uniqueUcs = new Set();
         const countsEtapas = { pre: 0, prot: 0, operacional: 0, emExclusao: 0, excluido: 0 };
         let totalPrimeiros = 0;
         
         const totals = filteredData.reduce((acc, row) => {
-            // A PRIMEIRA vez que uma UC cai aqui, é sempre o mês mais recente dela.
             if (!uniqueUcs.has(row.uc)) {
                 uniqueUcs.add(row.uc);
                 
@@ -416,7 +425,6 @@ export default function PortalCamila() {
                 else if (et === 'EM EXCLUSÃO') countsEtapas.emExclusao++;
                 else if (et === 'EXCLUÍDO') countsEtapas.excluido++;
 
-                // Puxa estritamente o Saldo (em kWh) do mês mais recente da UC
                 acc.saldoAtual += (row.saldo || 0);
             }
 
@@ -425,11 +433,9 @@ export default function PortalCamila() {
             acc.boleto += (row.boleto_simplifica || 0);
             acc.economia += (row.economia_rs || 0);
 
+            // Agora o cálculo da métrica puxa direto do 'ciclo', que já fez a validação de etapa na raiz
             if (row.ciclo === 'Primeiro Faturamento') {
-                const et = String(row.objetivo_etapa || '').toUpperCase();
-                if (et === 'PRÉ-PROTOCOLO' || et === 'PROTOCOLADOS' || et === 'PROTOCOLADO') {
-                    totalPrimeiros++;
-                }
+                totalPrimeiros++;
             }
 
             return acc;
@@ -459,7 +465,7 @@ export default function PortalCamila() {
     const optCiclos = ['Primeiro Faturamento', 'Recorrente', 'Sem compensação', 'Em análise'];
     const optEtapas = Array.from(new Set(data.map(d => d.objetivo_etapa))).filter(Boolean).sort();
     
-    const optMes = Array.from(new Set(data.map(d => d.mes_referencia)))
+    const optMes = Array.from(new Set(data.map(d => formatMesRef(d.mes_referencia))))
         .filter(m => m !== 'N/D' && m !== '-')
         .sort((a, b) => getSortableDate(b) - getSortableDate(a));
 
@@ -476,7 +482,7 @@ export default function PortalCamila() {
                 row.uc, 
                 row.nome_cliente,
                 row.concessionaria,
-                row.mes_referencia,
+                formatMesRef(row.mes_referencia),
                 row.consumo_kwh, 
                 row.compensacao_kwh, 
                 efic,
@@ -515,19 +521,18 @@ export default function PortalCamila() {
         }
     };
 
+    // CORREÇÃO: O botão não força mais os status 'Pré-protocolo' nos dropdowns, mantendo apenas o filtro limpo de 'Primeiro Faturamento'
     const toggleAtalhoNovosFaturamentos = () => {
-        const isActive = filtroCiclo.includes('Primeiro Faturamento') && (filtroEtapa.includes('Pré-protocolo') || filtroEtapa.includes('Protocolados'));
+        const isActive = filtroCiclo.includes('Primeiro Faturamento');
         if (isActive) {
             setFiltroCiclo([]);
-            setFiltroEtapa([]);
         } else {
             setFiltroCiclo(['Primeiro Faturamento']);
-            setFiltroEtapa(['Pré-protocolo', 'Protocolados', 'PROTOCOLADO', 'PRÉ-PROTOCOLO']);
+            setFiltroEtapa([]);
             setPage(1);
         }
     };
 
-    // --- CÁLCULO DOS DADOS DO RELATÓRIO DO CLIENTE ---
     const relatorioData = useMemo(() => {
         if (!relatorioUc) return null;
         
@@ -627,7 +632,6 @@ export default function PortalCamila() {
     return (
         <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col pb-20">
             
-            {/* CSS BLINDADO PARA IMPRESSÃO EM A4 */}
             {activeTab === 'relatorio' && (
                 <style>
                     {`
@@ -668,7 +672,6 @@ export default function PortalCamila() {
                 </style>
             )}
 
-            {/* CABEÇALHO */}
             <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center sticky top-0 z-40 print:hidden">
                 <div className="flex items-center gap-4">
                     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-700 shadow-sm">
@@ -693,17 +696,13 @@ export default function PortalCamila() {
 
             <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto print:p-0 print:m-0 print:block">
                 
-                {/* ABA 1: CARTEIRA OPERACIONAL */}
                 {activeTab === 'carteira' && (
                     <div className="print:hidden space-y-6">
                         
-                        {/* COCKPIT: GRID 75% Esquerda / 25% Direita */}
                         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 animate-in fade-in zoom-in duration-500">
                             
-                            {/* ESQUERDA (75%) */}
                             <div className="xl:col-span-3 flex flex-col gap-6">
                                 
-                                {/* LINHA 1: KPIS PRINCIPAIS - Layout Repaginado */}
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                         <div className="flex items-center gap-1.5">
@@ -766,11 +765,10 @@ export default function PortalCamila() {
                                     </div>
                                 </div>
 
-                                {/* LINHA 2: ATALHOS / FUNIL DE STATUS */}
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                                     <button 
                                         onClick={toggleAtalhoNovosFaturamentos}
-                                        className={`p-3 rounded-xl border text-left transition-all ${filtroCiclo.includes('Primeiro Faturamento') && (filtroEtapa.includes('Pré-protocolo') || filtroEtapa.includes('Protocolados')) ? 'bg-purple-900/40 border-purple-500 ring-1 ring-purple-500' : 'bg-slate-900 border-slate-800 hover:border-purple-500/50'}`}
+                                        className={`p-3 rounded-xl border text-left transition-all ${filtroCiclo.includes('Primeiro Faturamento') ? 'bg-purple-900/40 border-purple-500 ring-1 ring-purple-500' : 'bg-slate-900 border-slate-800 hover:border-purple-500/50'}`}
                                     >
                                         <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Sparkles size={12}/> Novos Faturamentos</p>
                                         <p className="text-2xl font-bold font-mono text-white">{metrics.primeirosFaturamentos}</p>
@@ -817,7 +815,6 @@ export default function PortalCamila() {
                                     </button>
                                 </div>
 
-                                {/* LINHA 3: JORNADA DO CLIENTE */}
                                 <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col justify-center flex-1 min-h-[140px]">
                                     <div className="flex items-center gap-2 mb-6">
                                         <Clock size={16} className="text-emerald-400"/>
@@ -862,7 +859,6 @@ export default function PortalCamila() {
                                 </div>
                             </div>
 
-                            {/* DIREITA (25%) - CHURN */}
                             <div className="xl:col-span-1 relative min-h-[300px] xl:min-h-0">
                                 <div className="absolute inset-0 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col">
                                     <div className="flex justify-between items-center mb-4 shrink-0">
@@ -886,7 +882,6 @@ export default function PortalCamila() {
 
                         </div>
 
-                        {/* FILTROS ALINHADOS NA MESMA LINHA */}
                         <section className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm flex flex-wrap items-end gap-3">
                             <div className="flex-1 min-w-[220px]">
                                 <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block">Buscar UC ou Cliente</label>
@@ -918,7 +913,6 @@ export default function PortalCamila() {
                             </div>
                         </section>
 
-                        {/* TABELA */}
                         <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden flex flex-col flex-1">
                             <div className="p-4 border-b border-slate-800 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-900/50">
                                 <h2 className="font-display font-bold text-white flex items-center gap-2"><TableIcon className="text-purple-500" size={20}/> Tabela Operacional</h2>
@@ -959,7 +953,7 @@ export default function PortalCamila() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800/50">
-                                        {paginatedData.map((row) => {
+                                        {paginatedData.map((row, index) => {
                                             const badge = getPaymentBadge(row.status);
                                             const chaveLinha = row.id_chave_composta || `${row.uc}-${row.mes_referencia}`;
 
@@ -969,12 +963,10 @@ export default function PortalCamila() {
                                             else if (eficPercent >= 70) { eficColor = 'text-yellow-400'; eficBg = 'bg-yellow-900/40 border-yellow-800/50'; }
 
                                             const linkBoletoLumiDireto = row.fonte_dados === 'LUMI' && row.link_boleto_simplifica ? `https://api.labs-lumi.com.br/faturas/download/${row.link_boleto_simplifica}` : null;
-                                            
-                                            // RD Link Seguro sem Gambiarra de Texto
                                             const rdLink = row.id_negocio ? `https://crm.rdstation.com/app/deals/${row.id_negocio}` : null;
 
                                             return (
-                                                <tr key={chaveLinha} className="hover:bg-slate-800/40 transition-colors">
+                                                <tr key={`${chaveLinha}-${index}`} className="hover:bg-slate-800/40 transition-colors">
                                                     <td className="px-5 py-3">
                                                         <div className="font-mono text-slate-200 font-bold">{row.uc}</div>
                                                         <div className="text-xs text-slate-500 truncate max-w-[350px]" title={row.nome_cliente}>
@@ -992,7 +984,6 @@ export default function PortalCamila() {
                                                     {colunasAtivas.includes('Ações (Links)') && (
                                                         <td className="px-5 py-3 text-center">
                                                             <div className="flex items-center justify-center gap-2">
-                                                                {/* BOTÃO FATURA CONCESSIONÁRIA */}
                                                                 {row.fonte_dados === 'UNIFICA' ? (
                                                                     <button 
                                                                         onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'FATURA', `btn_fat_${chaveLinha}`)}
@@ -1017,7 +1008,6 @@ export default function PortalCamila() {
                                                                     </div>
                                                                 )}
                                                                 
-                                                                {/* BOTÃO BOLETO SIMPLIFICA */}
                                                                 {row.fonte_dados === 'UNIFICA' ? (
                                                                     <button 
                                                                         onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'BOLETO', `btn_bol_${chaveLinha}`)}
@@ -1079,7 +1069,6 @@ export default function PortalCamila() {
 
                                                     {colunasAtivas.includes('Economia (R$)') && <td className="px-5 py-3 text-right font-medium text-emerald-500">{formatMoney(row.economia_rs)}</td>}
                                                     
-                                                    {/* NOVO: Coluna de Saldo usando toLocaleString para kWh */}
                                                     {colunasAtivas.includes('Saldo (kWh)') && <td className="px-5 py-3 text-right font-mono text-cyan-400">{Number(row.saldo || 0).toLocaleString('pt-BR')}</td>}
 
                                                     {colunasAtivas.includes('Status Pagamento') && (
@@ -1088,7 +1077,7 @@ export default function PortalCamila() {
                                                         </td>
                                                     )}
                                                     {colunasAtivas.includes('Concessionária') && <td className="px-5 py-3 text-xs text-slate-400">{row.concessionaria || '-'}</td>}
-                                                    {colunasAtivas.includes('Mês Referência') && <td className="px-5 py-3 text-center font-mono text-xs text-slate-400">{row.mes_referencia}</td>}
+                                                    {colunasAtivas.includes('Mês Referência') && <td className="px-5 py-3 text-center font-mono text-xs text-slate-400">{formatMesRef(row.mes_referencia)}</td>}
                                                     {colunasAtivas.includes('Etapa') && <td className="px-5 py-3 text-xs text-slate-300">{row.objetivo_etapa || '-'}</td>}
                                                     {colunasAtivas.includes('Motivo Cancelamento') && <td className="px-5 py-3 text-xs text-rose-300/70 truncate max-w-[150px]" title={row.motivo_cancelamento}>{row.motivo_cancelamento || '-'}</td>}
                                                 </tr>
@@ -1112,7 +1101,6 @@ export default function PortalCamila() {
                 {/* --- ABA 2: RELATÓRIO DO CLIENTE (PRINT-FRIENDLY A4) --- */}
                 {activeTab === 'relatorio' && (
                     <div id="relatorio-print-container" className="flex flex-col gap-6 w-full mx-auto print:max-w-[210mm] page-break-inside-avoid">
-                        {/* CONTROLES DE IMPRESSÃO */}
                         <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden flex flex-col sm:flex-row gap-4 justify-between items-center z-20 max-w-[900px] w-full mx-auto">
                             <div className="flex flex-col gap-1 w-full sm:w-[400px]">
                                 <label className="text-xs font-bold font-display text-slate-400 uppercase tracking-wider">Selecione o Cliente / UC</label>
@@ -1161,7 +1149,6 @@ export default function PortalCamila() {
                             </button>
                         </div>
 
-                        {/* O RELATÓRIO EM SI */}
                         {relatorioData ? (
                             <div className="bg-slate-900 print:bg-[#0a0a0a] border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-2 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full print:text-white page-break-inside-avoid">
                                 

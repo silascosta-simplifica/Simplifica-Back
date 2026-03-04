@@ -373,10 +373,36 @@ function AdminDashboard() {
   useEffect(() => { setAuditPage(1); }, [auditSearch, auditFilterEtapa, auditFilterInconsistencia, selectedConcessionaria, selectedArea]);
   useEffect(() => { setCrmPage(1); }, [crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus]);
 
+  // DEDUPLICAÇÃO INTELIGENTE DO RAW_DATA
   const data = useMemo(() => {
     if (!rawData) return [];
     const parseNum = (val: any) => { if (val === null || val === undefined || val === '') return 0; const n = Number(val); return isNaN(n) ? 0 : n; };
-    return rawData.map((d: any) => {
+    
+    const dedupMap = new Map();
+    
+    rawData.forEach((d: any) => {
+        const mes = d['mês_referência'] || d.mes_referencia_formatado || 'N/D';
+        const chave = d.id_chave_composta || `${d.uc}-${mes}`;
+        
+        if (!dedupMap.has(chave)) {
+            dedupMap.set(chave, d);
+        } else {
+            const existente = dedupMap.get(chave);
+            const valNovo = parseNum(d.valor_real_cobranca);
+            const valExistente = parseNum(existente.valor_real_cobranca);
+            
+            // Prioridade 1: Dados reais (LUMI/UNIFICA) ganham dos estimados (RD)
+            if (existente.fonte_dados === 'RD' && d.fonte_dados !== 'RD') {
+                dedupMap.set(chave, d);
+            } 
+            // Prioridade 2: Se forem da mesma fonte, fica com o que tem o maior valor de faturamento preenchido
+            else if (existente.fonte_dados === d.fonte_dados && valNovo > valExistente) {
+                dedupMap.set(chave, d);
+            }
+        }
+    });
+
+    return Array.from(dedupMap.values()).map((d: any) => {
       const conc = d['concessionária'] || d.concessionaria || d.concessionaria_rd || 'Outra';
       const area = d['área_de_gestão'] || d.area_de_gestao || 'Outros';
       const mes = d['mês_referência'] || d.mes_referencia_formatado || 'N/D';
@@ -416,6 +442,19 @@ function AdminDashboard() {
       };
     });
   }, [rawData]);
+
+  // DEDUPLICAÇÃO INTELIGENTE DO CRM
+  const uniqueCrmDataGlobal = useMemo(() => {
+      if (!crmData) return [];
+      const map = new Map();
+      crmData.forEach((d: any) => {
+          // Apenas 1 registro por UC para evitar que joins sujos inflem números do funil
+          if (d.uc && !map.has(d.uc)) {
+              map.set(d.uc, d);
+          }
+      });
+      return Array.from(map.values());
+  }, [crmData]);
 
   const parseBrDate = (dateStr: string | null) => {
     if (!dateStr) return null;
@@ -570,7 +609,7 @@ function AdminDashboard() {
     let sumProtEcon = 0, countProtEcon = 0;
     let sumEconFat = 0, countEconFat = 0;
 
-    crmData.forEach(d => {
+    uniqueCrmDataGlobal.forEach((d: any) => {
         const matchConc = selectedConcessionaria === 'Todas' || (d.concessionaria || 'Outra') === selectedConcessionaria;
         const matchArea = selectedArea === 'Todas' || (d.area_de_gestao || 'Outros') === selectedArea;
         const matchEtapa = selectedEtapa === 'Todas' || (d.objetivo_etapa || 'Sem Etapa') === selectedEtapa;
@@ -592,13 +631,13 @@ function AdminDashboard() {
         protEcon: countProtEcon > 0 ? Math.round(sumProtEcon / countProtEcon) : 0,
         econFat: countEconFat > 0 ? Math.round(sumEconFat / countEconFat) : 0
     };
-  }, [crmData, selectedConcessionaria, selectedArea, selectedEtapa]);
+  }, [uniqueCrmDataGlobal, selectedConcessionaria, selectedArea, selectedEtapa]);
 
   const auditData = useMemo(() => {
       const issuesAll: any[] = [];
       let stats = { totalAnalisados: 0, percIntegridade: 0 };
 
-      crmData.forEach(item => {
+      uniqueCrmDataGlobal.forEach((item: any) => {
           const matchConc = selectedConcessionaria === 'Todas' || (item.concessionaria || 'Outra') === selectedConcessionaria;
           const matchArea = selectedArea === 'Todas' || (item.area_de_gestao || 'Outros') === selectedArea;
           const matchEtapaGlob = selectedEtapa === 'Todas' || (item.objetivo_etapa || 'Sem Etapa') === selectedEtapa;
@@ -634,7 +673,7 @@ function AdminDashboard() {
       });
 
       return { issues: filteredIssues, stats, options: { etapas: uniqueEtapas, inconsistencias: uniqueInconsistencias } };
-  }, [crmData, selectedConcessionaria, selectedArea, selectedEtapa, auditSearch, auditFilterEtapa, auditFilterInconsistencia]);
+  }, [uniqueCrmDataGlobal, selectedConcessionaria, selectedArea, selectedEtapa, auditSearch, auditFilterEtapa, auditFilterInconsistencia]);
 
   const chartData = useMemo(() => {
     const endDate = selectedMesRef === 'Todos' ? new Date() : endOfMonth(parseRefMonth(selectedMesRef));
@@ -959,7 +998,7 @@ function AdminDashboard() {
       const globalTotal = { ucs: 0, mwh: 0 };
 
       // Regra de pureza: ignora apenas se a etapa for inválida ou se a área de gestão for explicitamente "Outros" / vazia.
-      const validCrmData = crmData.filter((item: any) => {
+      const validCrmData = uniqueCrmDataGlobal.filter((item: any) => {
           const etapa = item.objetivo_etapa;
           const area = item.area_de_gestao;
           
@@ -1015,7 +1054,7 @@ function AdminDashboard() {
       });
 
       return { matrix, allConcessionarias, concessionariaTotals, globalTotal, areaTotals };
-  }, [crmData]);
+  }, [uniqueCrmDataGlobal]);
 
   const operationalData = useMemo(() => {
     if (selectedMesRef === 'Todos') return [];
@@ -1053,14 +1092,14 @@ function AdminDashboard() {
     setSortConfig({ key, direction });
   };
 
-  // CRM TAB: Reflete 100% dos dados brutos
+  // CRM TAB: Reflete os dados filtrados sem duplicatas
   const crmProcessed = useMemo(() => {
-    if (!crmData) return { filtered: [], stats: null, options: { concessionarias: [], areas: [], etapas: [], status: [] } };
+    if (!uniqueCrmDataGlobal) return { filtered: [], stats: null, options: { concessionarias: [], areas: [], etapas: [], status: [] } };
 
-    const concessionariasRaw = Array.from(new Set(crmData.map(d => d.concessionaria || 'Outra').filter(Boolean))).sort();
-    const areasRaw = Array.from(new Set(crmData.map(d => d.area_de_gestao || 'Outros').filter(Boolean))).sort();
-    const etapasRaw = Array.from(new Set(crmData.map(d => d.objetivo_etapa || 'Sem Etapa').filter(Boolean)));
-    const statusRaw = Array.from(new Set(crmData.map(d => d.status_rd || 'Sem Status').filter(Boolean))).sort();
+    const concessionariasRaw = Array.from(new Set(uniqueCrmDataGlobal.map((d: any) => d.concessionaria || 'Outra').filter(Boolean))).sort();
+    const areasRaw = Array.from(new Set(uniqueCrmDataGlobal.map((d: any) => d.area_de_gestao || 'Outros').filter(Boolean))).sort();
+    const etapasRaw = Array.from(new Set(uniqueCrmDataGlobal.map((d: any) => d.objetivo_etapa || 'Sem Etapa').filter(Boolean)));
+    const statusRaw = Array.from(new Set(uniqueCrmDataGlobal.map((d: any) => d.status_rd || 'Sem Status').filter(Boolean))).sort();
 
     const etapaOrder: Record<string, number> = {
         'Pré-protocolo': 1,
@@ -1076,7 +1115,7 @@ function AdminDashboard() {
     };
     const etapasSorted = etapasRaw.sort((a: any, b: any) => getEtapaWeight(a) - getEtapaWeight(b));
 
-    const filtered = crmData.filter((item: any) => {
+    const filtered = uniqueCrmDataGlobal.filter((item: any) => {
         const s = crmSearch.toLowerCase();
         const matchSearch = !s || (item.uc && item.uc.toLowerCase().includes(s)) || (item.nome_negocio && item.nome_negocio.toLowerCase().includes(s));
         
@@ -1110,7 +1149,7 @@ function AdminDashboard() {
     };
 
     return { filtered, stats, options: { concessionarias: concessionariasRaw, areas: areasRaw, etapas: etapasSorted, status: statusRaw } };
-  }, [crmData, crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus]); 
+  }, [uniqueCrmDataGlobal, crmSearch, crmFilterConcessionaria, crmFilterArea, crmFilterEtapa, crmFilterStatus]); 
 
   const financialGroups = useMemo(() => {
     const normalize = (st: string) => (st || '').toUpperCase();
@@ -1456,14 +1495,14 @@ function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Descontos Médios */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col xl:col-span-1 h-[355px]">
-                    <div className="flex justify-between items-center mb-3 shrink-0" title="Percentual médio de desconto aplicado aos clientes de cada distribuidora">
-                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Receipt size={16} className="text-rose-400"/> Descontos</h3>
-                        <span className="text-[10px] bg-slate-950 border border-slate-700 px-2 py-1 rounded-lg font-bold text-rose-400">Média: {biMetrics.descontoGeral}%</span>
+                {/* Descontos Médios (Tiramos o limite e colocamos scroll interno dinâmico) */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
+                    <div className="flex justify-between items-center mb-4 shrink-0" title="Percentual médio de desconto aplicado aos clientes de cada distribuidora">
+                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Receipt size={16} className="text-rose-400"/> Descontos Aplicados</h3>
+                        <span className="text-xs bg-slate-950 border border-slate-700 px-2 py-1 rounded-lg font-bold text-rose-400">Média: {biMetrics.descontoGeral}%</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin scrollbar-thumb-slate-700 min-h-0">
-                        <div style={{ height: Math.max(200, biMetrics.descontoDist.length * 32) }}>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
+                        <div style={{ height: Math.max(200, biMetrics.descontoDist.length * 35) }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={biMetrics.descontoDist} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
@@ -1479,21 +1518,21 @@ function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* TARIFA MÉDIA (COM 5 CASAS DECIMAIS) */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col xl:col-span-1 h-[355px]">
-                    <div className="flex justify-between items-center mb-3 shrink-0" title="Tarifa Média Aplicada (R$ / kWh) por Distribuidora nos faturamentos reais">
-                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><DollarSign size={16} className="text-emerald-400"/> Tarifa (R$)</h3>
+                {/* TARIFA MÉDIA */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
+                    <div className="flex justify-between items-center mb-4 shrink-0" title="Tarifa Média Aplicada (R$ / kWh) por Distribuidora nos faturamentos reais">
+                        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><DollarSign size={16} className="text-emerald-400"/> Tarifa Média (R$)</h3>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin scrollbar-thumb-slate-700 min-h-0">
-                        <div style={{ height: Math.max(200, biMetrics.tarifaDist.length * 32) }}>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
+                        <div style={{ height: Math.max(200, biMetrics.tarifaDist.length * 35) }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={biMetrics.tarifaDist} layout="vertical" margin={{ top: 0, right: 50, left: 10, bottom: 0 }}>
+                                <BarChart data={biMetrics.tarifaDist} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
                                     <XAxis type="number" stroke="#94a3b8" fontSize={10} hide />
                                     <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} width={80} axisLine={false} tickLine={false} />
-                                    <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `R$ ${Number(val).toFixed(5)}`} />
+                                    <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '12px', color: '#fff' }} formatter={(val: any) => `R$ ${val}`} />
                                     <Bar dataKey="tarifa" fill="#10b981" radius={[0, 4, 4, 0]} barSize={16}>
-                                        <LabelList dataKey="tarifa" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `R$ ${Number(v).toFixed(5)}`}/>
+                                        <LabelList dataKey="tarifa" position="right" fill="#cbd5e1" fontSize={10} formatter={(v:any) => `R$ ${v.toFixed(2)}`}/>
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
@@ -1502,17 +1541,17 @@ function AdminDashboard() {
                 </div>
 
                 {/* SLA DE FATURAMENTO */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col relative overflow-hidden xl:col-span-1 h-[355px]">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Clock size={100} className="text-blue-500"/></div>
-                    <div className="flex justify-between items-center mb-3 relative z-10 shrink-0" title="Delay (em dias) entre a Fatura da Distribuidora e a Emissão do seu Boleto">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col relative overflow-hidden xl:col-span-1">
+                    <div className="absolute top-0 right-0 p-5 opacity-5 pointer-events-none"><Clock size={100} className="text-blue-500"/></div>
+                    <div className="flex justify-between items-center mb-4 relative z-10 shrink-0" title="Delay (em dias) entre a Fatura da Distribuidora e a Emissão do seu Boleto">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                            <Clock size={16} className="text-blue-400"/> SLA Fatura
+                            <Clock size={16} className="text-blue-400"/> Atraso (Faturamento)
                         </h3>
-                        <span className="text-[10px] bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded-lg font-bold text-blue-400">Média: {biMetrics.slaGeral}d</span>
+                        <span className="text-xs bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded-lg font-bold text-blue-400">Média: {biMetrics.slaGeral}d</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin scrollbar-thumb-slate-700 min-h-0 relative z-10">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px] relative z-10">
                         {biMetrics.slaDist.length > 0 ? (
-                            <div style={{ height: Math.max(200, biMetrics.slaDist.length * 32) }}>
+                            <div style={{ height: Math.max(200, biMetrics.slaDist.length * 35) }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={biMetrics.slaDist} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
@@ -1527,26 +1566,26 @@ function AdminDashboard() {
                             </div>
                         ) : (
                             <div className="h-full flex items-center justify-center text-slate-500 text-xs text-center p-4">
-                                Sem dados de emissão.
+                                Sem dados de emissão da distribuidora no banco para calcular o delay.
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Churn Analítico */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col xl:col-span-1 h-[355px]">
-                    <div className="flex justify-between items-center mb-3 shrink-0">
+                {/* Churn Analítico - Agora permite crescimento vertical e scroll para alinhar com os gráficos vizinhos */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col xl:col-span-1 overflow-hidden">
+                    <div className="flex justify-between items-center mb-4 shrink-0">
                         <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2" title={biMetrics.churnTitle}><ShieldAlert size={16} className="text-orange-500"/> {biMetrics.churnTitle}</h3>
-                        <span className="text-[10px] bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="% de Cancelados (Neste mês filtrado ou Total Histórico) em relação ao total">Churn: {biMetrics.churnRate}%</span>
+                        <span className="text-xs bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg font-bold text-orange-400" title="% de Cancelados (Neste mês filtrado ou Total Histórico) em relação ao total">Churn: {biMetrics.churnRate}%</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-0">
-                        <div className="flex flex-col justify-start">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-slate-700 min-h-[200px]">
+                        <div className="flex flex-col justify-start space-y-3">
                             {biMetrics.churnData.length > 0 ? biMetrics.churnData.map((c, i) => (
-                                <div key={i} className="flex justify-between items-center text-xs border-b border-slate-800/50 pb-2.5 mb-2.5 last:border-0 last:pb-0 last:mb-0">
+                                <div key={i} className="flex justify-between items-center text-xs border-b border-slate-800/50 pb-3 last:border-0 last:pb-0">
                                     <span className="text-slate-400 truncate pr-2 flex-1 font-medium" title={c.name}>{c.name}</span>
                                     <div className="flex flex-col items-end min-w-max">
                                         <span className="font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded shadow-sm">{c.value} UCs</span>
-                                        <span className="text-[10px] text-slate-500 mt-0.5 font-mono">{formatEnergySmart(c.consumo, 'kWh')}</span>
+                                        <span className="text-[10px] text-slate-500 mt-1 font-mono">{formatEnergySmart(c.consumo, 'kWh')}</span>
                                     </div>
                                 </div>
                             )) : <p className="text-xs text-slate-500 text-center py-4">Nenhum cancelamento na data ou filtros selecionados.</p>}
@@ -1555,7 +1594,7 @@ function AdminDashboard() {
                 </div>
               </div>
 
-              {/* GRÁFICO DE EVOLUÇÃO */}
+              {/* GRÁFICO DE EVOLUÇÃO (Expandido Horizontalmente) */}
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col mb-6">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-bold font-display text-white flex items-center gap-2" title="Crescimento histórico de volume na base (Total ativo vs Entradas/Saídas)"><TrendingUp size={20} className="text-blue-500"/> Evolução da Carteira (MWh vs UCs)</h3>
@@ -1582,7 +1621,7 @@ function AdminDashboard() {
                 </div>
               </div>
 
-              {/* GRÁFICO DE CONSUMO/COMPENSAÇÃO */}
+              {/* GRÁFICO DE CONSUMO/COMPENSAÇÃO (Comprimido) */}
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col mb-8">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                   <div>
@@ -1673,7 +1712,7 @@ function AdminDashboard() {
             <div>
                 <h3 className="text-sm font-bold font-display text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><DollarSign size={16}/> Resumo de Faturamento</h3>
                 
-                {/* TOP CARDS DE FATURAMENTO */}
+                {/* TOP CARDS DE FATURAMENTO (Usam a Base Imutável para não piscarem ao buscar) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-lg relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 p-4 opacity-5 bg-white rounded-full"><DollarSign size={120} /></div>
