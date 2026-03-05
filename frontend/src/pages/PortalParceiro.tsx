@@ -79,7 +79,6 @@ const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon, ful
     );
 };
 
-{/* NOVO COMPONENTE: SingleSearchSelect (Seleção única com busca por digitação) */}
 const SingleSearchSelect = ({ options, selected, onChange, placeholder, icon: Icon, fullWidth = false }: any) => {
     const [isOpen, setIsOpen] = useState(false);
     const [termoBusca, setTermoBusca] = useState('');
@@ -159,7 +158,6 @@ export default function PortalParceiro() {
     const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
     const [filtroParceiro, setFiltroParceiro] = useState<string[]>([]); 
     
-    // Filtros específicos para a aba de Comissão
     const [comissaoMes, setComissaoMes] = useState<string>('');
     const [comissaoParceiro, setComissaoParceiro] = useState<string>(isAdmin ? '' : parceiroLogado);
 
@@ -500,7 +498,6 @@ export default function PortalParceiro() {
             return new Date(yB, mB - 1).getTime() - new Date(yA, mA - 1).getTime();
         });
 
-    // Inicializa o mês da comissão com o mês mais recente disponível assim que as opções carregarem
     useEffect(() => {
         if (optMes.length > 0 && !comissaoMes) {
             setComissaoMes(optMes[0]);
@@ -720,7 +717,6 @@ export default function PortalParceiro() {
         };
     }, [relatorioUc, data]);
 
-    // Lógica para montar os dados do Relatório de Comissão com as novas somas
     const relatorioComissaoData = useMemo(() => {
         if (!comissaoMes || !comissaoParceiro) return null;
 
@@ -734,8 +730,8 @@ export default function PortalParceiro() {
         if (filtered.length === 0) return null;
 
         let consumoTotal = 0;
-        let compensacaoTotal = 0; // Nova soma
-        let boletoTotal = 0; // Nova soma
+        let compensacaoTotal = 0; 
+        let boletoTotal = 0; 
         let comissaoTotal = 0;
 
         const rows = filtered.map(row => {
@@ -747,8 +743,8 @@ export default function PortalParceiro() {
             const comissaoVal = baseCalc * (perc / 100);
 
             consumoTotal += (row.consumo_kwh || 0);
-            compensacaoTotal += (row.compensacao_kwh || 0); // Cálculo
-            boletoTotal += (row.boleto_simplifica || 0); // Cálculo
+            compensacaoTotal += (row.compensacao_kwh || 0); 
+            boletoTotal += (row.boleto_simplifica || 0); 
             comissaoTotal += comissaoVal;
 
             return {
@@ -763,8 +759,8 @@ export default function PortalParceiro() {
             parceiro: comissaoParceiro,
             mes: comissaoMes,
             consumoTotal,
-            compensacaoTotal, // Retorno
-            boletoTotal, // Retorno
+            compensacaoTotal, 
+            boletoTotal, 
             comissaoTotal,
             rows
         };
@@ -791,7 +787,8 @@ export default function PortalParceiro() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col">
+        // NOTA: Adicionado "print:bg-white print:min-h-0" no wrapper principal para remover o fundo preto
+        <div className="min-h-screen print:min-h-0 bg-slate-950 print:bg-white text-white print:text-black font-sans flex flex-col">
             
             {activeTab === 'relatorio' && (
                 <style>
@@ -803,7 +800,7 @@ export default function PortalParceiro() {
                             }
                             
                             html, body, #root {
-                                background-color: #0f172a !important; 
+                                background-color: #ffffff !important; 
                                 color: white !important;
                                 -webkit-print-color-adjust: exact !important;
                                 print-color-adjust: exact !important;
@@ -888,7 +885,8 @@ export default function PortalParceiro() {
                 </div>
             </header>
 
-            <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto print:p-0 print:m-0 print:block">
+            {/* NOTA: Adicionado "print:bg-white" também na tag main */}
+            <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto print:p-0 print:m-0 print:block print:bg-white">
                 
                 {activeTab === 'carteira' && (
                     <div className="print:hidden space-y-6">
@@ -1519,7 +1517,6 @@ export default function PortalParceiro() {
                                     Relatório de Comissão
                                 </div>
 
-                                {/* LINHA DE RESUMO ATUALIZADA COM COMPENSAÇÃO TOTAL */}
                                 <div className="flex justify-between items-center text-center border-y-2 border-[#a3e635] py-4 mb-8">
                                     <div className="flex-1 px-2 border-r border-slate-300">
                                         <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider">Parceiro</p>
@@ -1546,7 +1543,6 @@ export default function PortalParceiro() {
                                 <div className="border-2 border-[#a3e635] rounded-xl p-4 overflow-x-auto">
                                     <table className="w-full text-[11px] text-left border-collapse">
                                         <thead>
-                                            {/* CABEÇALHOS ATUALIZADOS: text-[9px], whitespace-nowrap e px-1 */}
                                             <tr className="text-[#84cc16] border-b border-[#a3e635] text-[9px] whitespace-nowrap px-1">
                                                 <th className="pb-3 px-1 font-bold uppercase tracking-wide whitespace-nowrap">Clientes</th>
                                                 <th className="pb-3 px-1 font-bold uppercase tracking-wide whitespace-nowrap">UC</th>
@@ -1571,7 +1567,6 @@ export default function PortalParceiro() {
                                                     <td className="py-3 px-2 text-right font-bold text-[#65a30d]">{row.comissaoVal > 0 ? formatMoney(row.comissaoVal) : '-'}</td>
                                                 </tr>
                                             ))}
-                                            {/* LINHA DE TOTAIS NO FINAL DA TABELA ADICIONADA */}
                                             <tr className="bg-slate-100 font-bold text-slate-900 border-t-2 border-[#a3e635]">
                                                 <td className="py-3 px-2 text-left" colSpan={2}>
                                                     Total: <span className="font-medium text-slate-700 ml-2">{relatorioComissaoData.rows.length} UCs</span>
