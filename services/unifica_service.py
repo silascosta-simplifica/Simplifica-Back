@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import time
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -10,6 +11,7 @@ from urllib3.util.retry import Retry
 
 load_dotenv()
 
+# Configurações de Ambiente
 UNIFICA_URL = os.getenv("UNIFICA_BASE_URL")
 UNIFICA_TOKEN = os.getenv("UNIFICA_TOKEN")
 DB_URL = os.getenv("DATABASE_URL")
@@ -22,9 +24,13 @@ if not UNIFICA_URL or not UNIFICA_TOKEN or not DB_URL:
     print("🛑 ERRO: Verifique variáveis no .env")
     exit()
 
-engine = create_engine(DB_URL)
+# Engine com timeout de conexão para evitar que o script fique "pendurado" no banco
+engine = create_engine(
+    DB_URL, 
+    pool_pre_ping=True,
+    connect_args={'connect_timeout': 30}
+)
 
-# --- PASSO 0: AUTO-CURA DO BANCO (Cria colunas se faltarem) ---
 def verificar_e_criar_colunas():
     print("🛠️ Verificando estrutura da tabela raw_unifica...")
     sqls = [
@@ -37,7 +43,6 @@ def verificar_e_criar_colunas():
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS data_emissao_concessionaria date;",
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS vencimento_concessionaria date;",
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS data_emissao date;",
-        # NOVO CAMPO DE SALDO
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS kwh_balance_credits numeric DEFAULT 0;"
     ]
     
@@ -51,8 +56,9 @@ def verificar_e_criar_colunas():
 
 def get_session():
     session = requests.Session()
+    # Retry configurado para erros comuns de rede e servidor
     retry = Retry(
-        total=5, 
+        total=3, 
         backoff_factor=2, 
         status_forcelist=[429, 500, 502, 503, 504]
     )
@@ -75,7 +81,6 @@ def tratar_data(val):
     return s
 
 def limpar_uc(valor):
-    """Remove pontos, traços e espaços para padronizar com a RD Station"""
     if not valor: return None
     return str(valor).replace('.', '').replace('-', '').replace('/', '').replace(' ', '').strip()
 
@@ -97,11 +102,11 @@ def processar_item_unifica(item):
         "vencimento_concessionaria": tratar_data(item.get("dealership_bill_due_date")),
         "data_emissao": tratar_data(item.get("issue_date")),
         "link_fatura": item.get("billing_file_key") or item.get("dealership_bill_file_key"),
-        "kwh_balance_credits": limpar_numero(item.get("kWh_balance_credits")), # <--- NOVO CAMPO SENDO LIDO
+        "kwh_balance_credits": limpar_numero(item.get("kWh_balance_credits")),
         "updated_at": datetime.now()
     }
 
-def salvar_em_lotes(lista_itens):
+def salvar_em_lotes(lista_itens, pagina_atual):
     if not lista_itens: return
     dados_prontos = []
     
@@ -110,14 +115,10 @@ def salvar_em_lotes(lista_itens):
             p = processar_item_unifica(x)
             if p["uc"] and p["mes_referencia"] and len(str(p["mes_referencia"])) == 10:
                 dados_prontos.append(p)
-            else:
-                print(f"\n⚠️ Item DESCARTADO (Falta UC ou Data Inválida) -> UC: {p['uc']} | Mês: {p['mes_referencia']}")
         except Exception as e:
-            print(f"\n❌ ERRO ao processar linha: {e} | Dados brutos: {x.get('uc', 'Sem UC')}")
+            print(f"❌ ERRO ao processar linha: {e}")
 
-    if not dados_prontos: 
-        print("\n⚠️ Nenhum dado válido neste lote para salvar.")
-        return
+    if not dados_prontos: return
 
     with engine.begin() as conn:
         for item in dados_prontos:
@@ -160,10 +161,9 @@ def salvar_em_lotes(lista_itens):
                 "bar": item["codigo_barras"], "pix": item["codigo_pix"], 
                 "emi_conc": item["data_emissao_concessionaria"], "venc_conc": item["vencimento_concessionaria"], 
                 "emi": item["data_emissao"], "link": item["link_fatura"], 
-                "saldo": item["kwh_balance_credits"], # <--- VARIÁVEL SENDO PASSADA PARA O SQL
-                "upd": item["updated_at"]
+                "saldo": item["kwh_balance_credits"], "upd": item["updated_at"]
             })
-    print(f"   ✅ Unifica: Salvo lote de {len(dados_prontos)} registros...", end='\r')
+    print(f"✅ Unifica: Salvo lote de {len(dados_prontos)} registros da pág {pagina_atual}", flush=True)
 
 def carregar_checkpoint():
     if os.path.exists(CHECKPOINT_FILE):
@@ -182,11 +182,14 @@ def salvar_checkpoint(page):
 def executar_sync_unifica():
     verificar_e_criar_colunas()
     
-    print("🚀 Sincronizando Unifica (Modo Tanque de Guerra - Com Radar Ligado)...")
+    # Controle de tempo para evitar o limite de 6h do GitHub
+    start_time = time.time()
+    max_duration = 50 * 60  # Para em 50 minutos para salvar o estado com segurança
+    
+    print(f"🚀 Iniciando Sync Unifica às {datetime.now().strftime('%H:%M:%S')}")
     
     headers = {"Authorization": f"Bearer {UNIFICA_TOKEN}", "Content-Type": "application/json", "accept": "*/*"}
     full_url = f"{UNIFICA_URL}{ENDPOINT}"
-    
     session = get_session()
     
     page = carregar_checkpoint() 
@@ -194,40 +197,44 @@ def executar_sync_unifica():
     total_baixado = 0
     
     while True:
-        print(f"🔄 Pag {page}...", end=" ")
+        # Verificação de segurança de tempo
+        if time.time() - start_time > max_duration:
+            print("\n🕒 LIMITE DE TEMPO PREVENTIVO (50 min) ATINGIDO.")
+            print(f"Parando na página {page}. O checkpoint foi salvo para a próxima execução.")
+            break
+
         params = {"page": page, "per_page": per_page}
-        
+        tentativas_pag = 0
         sucesso = False
-        while not sucesso:
+        
+        while tentativas_pag < 5:
             try:
-                resp = session.get(full_url, headers=headers, params=params, timeout=120)
+                # Timeout explícito na requisição
+                resp = session.get(full_url, headers=headers, params=params, timeout=45)
                 
-                if resp.status_code == 429:
-                    print("\n⏳ Rate Limit (429). Esperando 30s...")
+                if resp.status_code == 200:
+                    sucesso = True
+                    break
+                elif resp.status_code == 429:
+                    print(f"\n⏳ Rate Limit (429) na pág {page}. Aguardando 30s...")
                     time.sleep(30)
-                    continue
-                
-                if resp.status_code != 200:
-                    print(f"\n❌ Erro API {resp.status_code}. Esperando 10s...")
-                    if resp.status_code in [401, 403]: 
-                        print("🛑 Erro de Autenticação/Permissão. Abortando execução.")
-                        return
-                    if resp.status_code == 404:
-                        print("🏁 Fim dos dados (Página não encontrada).")
-                        sucesso = True
-                        break
-                        
+                elif resp.status_code == 404:
+                    print(f"\n🏁 Página {page} retornou 404. Fim dos dados.")
+                    if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
+                    return
+                else:
+                    print(f"\n⚠️ Erro {resp.status_code} na pág {page}. Tentativa {tentativas_pag+1}/5")
                     time.sleep(10)
-                    continue
                 
-                sucesso = True
+                tentativas_pag += 1
 
             except Exception as e:
-                print(f"\n⚠️ Falha conexão: {e}. Tentando novamente em 15s...")
+                tentativas_pag += 1
+                print(f"\n⚠️ Falha de conexão na pág {page} ({tentativas_pag}/5): {e}")
                 time.sleep(15)
-        
-        if resp.status_code == 404:
-            if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
+
+        if not sucesso:
+            print(f"❌ Não foi possível carregar a página {page} após 5 tentativas. Abortando para evitar loop.")
             break
 
         try:
@@ -235,28 +242,32 @@ def executar_sync_unifica():
             lista = dados.get("data", [])
             
             if not lista: 
-                print("\n🏁 Fim dos dados (Lista vazia).")
+                print(f"\n🏁 Lista vazia na página {page}. Sincronização concluída.")
                 if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
                 break
             
-            salvar_em_lotes(lista)
+            salvar_em_lotes(lista, page)
             total_baixado += len(lista)
-            print(f"(Total: {total_baixado})")
             
+            # Salva o progresso para a próxima execução
             salvar_checkpoint(page + 1)
             
             meta = dados.get("meta", {})
-            if page >= meta.get("last_page", 99999):
-                print("\n🏁 Última página atingida pelas métricas da API.")
+            last_page = meta.get("last_page")
+            if last_page and page >= last_page:
+                print(f"\n🏁 Última página ({last_page}) atingida com sucesso.")
                 if os.path.exists(CHECKPOINT_FILE): os.remove(CHECKPOINT_FILE)
                 break
                 
             page += 1
-            time.sleep(0.5) 
+            # Pequeno respiro para não sobrecarregar a API
+            time.sleep(0.3) 
             
         except Exception as e:
-            print(f"\n❌ Erro processamento JSON na página {page}: {e}")
+            print(f"\n❌ Erro ao processar JSON da página {page}: {e}")
             break
+
+    print(f"\n✅ Sincronização encerrada. Total de registros processados: {total_baixado}")
 
 if __name__ == "__main__":
     executar_sync_unifica()

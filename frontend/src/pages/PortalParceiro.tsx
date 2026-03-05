@@ -79,6 +79,70 @@ const MultiSelect = ({ options, selected, onChange, placeholder, icon: Icon, ful
     );
 };
 
+{/* NOVO COMPONENTE: SingleSearchSelect (Seleção única com busca por digitação) */}
+const SingleSearchSelect = ({ options, selected, onChange, placeholder, icon: Icon, fullWidth = false }: any) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [termoBusca, setTermoBusca] = useState('');
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: any) => { 
+            if (containerRef.current && !containerRef.current.contains(e.target)) {
+                setIsOpen(false);
+                setTermoBusca(''); 
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectOption = (option: string) => {
+        onChange(option); 
+        setIsOpen(false);
+        setTermoBusca('');
+    };
+
+    const displayValue = selected ? selected : placeholder;
+    const opcoesFiltradas = termoBusca ? options.filter((o: string) => o.toLowerCase().includes(termoBusca.toLowerCase())) : options;
+
+    return (
+        <div className={`relative ${fullWidth ? 'w-full' : ''}`} ref={containerRef}>
+            <button onClick={() => setIsOpen(!isOpen)} className={`bg-slate-800 border ${isOpen ? 'border-yellow-500 ring-1 ring-yellow-500/50' : 'border-slate-700'} rounded-lg px-3 py-2 text-sm text-white outline-none flex items-center justify-between transition-all hover:bg-slate-700 w-full`}>
+                <div className="flex items-center gap-2 min-w-0">
+                    {Icon && <Icon size={14} className="text-slate-400 shrink-0" />}
+                    <span className={`truncate ${selected === '' ? 'text-slate-400' : 'text-slate-200'}`}>{displayValue}</span>
+                </div>
+                <ChevronDown size={14} className={`text-slate-500 transition-transform shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+                <div className="absolute top-full right-0 mt-2 w-full min-w-[220px] max-h-72 flex flex-col bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <div className="p-2 border-b border-slate-700 bg-slate-900 sticky top-0 z-10">
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-2 text-slate-500" size={14} />
+                            <input 
+                                type="text" 
+                                value={termoBusca}
+                                onChange={(e) => setTermoBusca(e.target.value)}
+                                placeholder="Buscar..." 
+                                className="w-full bg-slate-950 border border-slate-700 rounded-md pl-8 pr-2 py-1.5 text-xs text-white outline-none focus:border-yellow-500"
+                            />
+                        </div>
+                    </div>
+                    <div className="overflow-y-auto flex-1 p-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        {opcoesFiltradas.length > 0 ? opcoesFiltradas.map((opt: string) => (
+                            <div key={opt} onClick={() => selectOption(opt)} className={`flex items-center gap-2 px-2 py-2 hover:bg-slate-800 rounded cursor-pointer group ${selected === opt ? 'bg-slate-800/50' : ''}`}>
+                                <span className={`text-sm break-words ${selected === opt ? 'text-white font-medium' : 'text-slate-400'}`}>{opt}</span>
+                            </div>
+                        )) : (
+                            <div className="p-3 text-center text-xs text-slate-500">Nenhum resultado</div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 export default function PortalParceiro() {
     const navigate = useNavigate();
     const parceiroLogado = localStorage.getItem('@Simplifica:parceiroLogado') || '';
@@ -86,7 +150,7 @@ export default function PortalParceiro() {
 
     const { data: rawData, loading: analyticsLoading } = useAnalytics();
 
-    const [activeTab, setActiveTab] = useState<'carteira' | 'gestao' | 'relatorio'>('carteira');
+    const [activeTab, setActiveTab] = useState<'carteira' | 'gestao' | 'relatorio' | 'comissao'>('carteira');
     
     const [busca, setBusca] = useState('');
     const [filtroEtapa, setFiltroEtapa] = useState<string[]>([]);
@@ -95,6 +159,10 @@ export default function PortalParceiro() {
     const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
     const [filtroParceiro, setFiltroParceiro] = useState<string[]>([]); 
     
+    // Filtros específicos para a aba de Comissão
+    const [comissaoMes, setComissaoMes] = useState<string>('');
+    const [comissaoParceiro, setComissaoParceiro] = useState<string>(isAdmin ? '' : parceiroLogado);
+
     const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Data Ganho', 'Data Protocolo', 'Data Cancelamento', 'Mês Referência', 'Etapa', 'Economia (R$)', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Percentual (%)', 'Comissão (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Data Emissão', 'Vencimento', 'Código PIX', 'Código de Barras'];
     const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Mês Referência', 'Etapa', 'Status Pagamento', 'Eficiência (%)', 'Comissão (R$)', 'Código PIX']);
 
@@ -177,8 +245,8 @@ export default function PortalParceiro() {
 
     useEffect(() => {
         if (!parceiroLogado) { navigate('/login-parceiro'); return; }
-        if (isAdmin) fetchAcessos();
-    }, [parceiroLogado, isAdmin, navigate]);
+        if (isAdmin && activeTab === 'gestao') fetchAcessos();
+    }, [parceiroLogado, isAdmin, navigate, activeTab]);
 
     const fetchAcessos = async () => {
         const { data: pendentes } = await supabase.from('view_parceiros_sem_acesso').select('*');
@@ -321,7 +389,6 @@ export default function PortalParceiro() {
     const formatMoney = (val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
     const toDateBR = (d: any) => { if (!d) return '-'; try { return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'UTC' }); } catch { return '-'; } };
     
-    // CORREÇÃO: Blindagem para evitar crash com .split() em valores que não são string
     const formatMesRef = (m: any) => { 
         if (!m) return '-'; 
         const strM = String(m);
@@ -330,7 +397,6 @@ export default function PortalParceiro() {
         return strM; 
     };
 
-    // CORREÇÃO: Função de ordenação agora consegue interpretar o formato YYYY-MM para ordenação correta
     const getSortableDate = (mesRef: any) => {
         if (!mesRef || mesRef === 'N/D' || mesRef === '-') return 0;
         const str = String(mesRef);
@@ -411,7 +477,6 @@ export default function PortalParceiro() {
 
         let finalData = isAdmin ? dadosTratados : dadosTratados.filter((d: any) => d.quem_indicou === parceiroLogado);
         
-        // CORREÇÃO: Evitar mutação direta do array usando o spread operator [...finalData]
         return [...finalData].sort((a: any, b: any) => getSortableDate(b.mes_referencia) - getSortableDate(a.mes_referencia));
     }, [rawData, isAdmin, parceiroLogado]);
 
@@ -422,6 +487,25 @@ export default function PortalParceiro() {
         });
         return Array.from(map.entries()).map(([uc, label]) => ({ uc, label })).sort((a,b) => a.label.localeCompare(b.label));
     }, [data]);
+
+    const optEtapas = Array.from(new Set(data.map(d => d.objetivo_etapa))).sort();
+    const optConc = Array.from(new Set(data.map(d => d.concessionaria))).sort();
+    const optParceiros = Array.from(new Set(data.map(d => d.quem_indicou))).filter(Boolean).sort();
+    const optStatus = ['Pago', 'Atrasado', 'Aberto', '-'];
+    
+    const optMes = Array.from(new Set(data.map(d => formatMesRef(d.mes_referencia))))
+        .filter(m => m !== '-')
+        .sort((a: any, b: any) => {
+            const [mA, yA] = a.split('/'); const [mB, yB] = b.split('/');
+            return new Date(yB, mB - 1).getTime() - new Date(yA, mA - 1).getTime();
+        });
+
+    // Inicializa o mês da comissão com o mês mais recente disponível assim que as opções carregarem
+    useEffect(() => {
+        if (optMes.length > 0 && !comissaoMes) {
+            setComissaoMes(optMes[0]);
+        }
+    }, [optMes, comissaoMes]);
 
     const filteredData = useMemo(() => {
         return data.filter(item => {
@@ -468,18 +552,6 @@ export default function PortalParceiro() {
 
     const paginatedData = filteredData.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
     const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
-
-    const optEtapas = Array.from(new Set(data.map(d => d.objetivo_etapa))).sort();
-    const optConc = Array.from(new Set(data.map(d => d.concessionaria))).sort();
-    const optParceiros = Array.from(new Set(data.map(d => d.quem_indicou))).filter(Boolean).sort();
-    const optStatus = ['Pago', 'Atrasado', 'Aberto', '-'];
-    
-    const optMes = Array.from(new Set(data.map(d => formatMesRef(d.mes_referencia))))
-        .filter(m => m !== '-')
-        .sort((a: any, b: any) => {
-            const [mA, yA] = a.split('/'); const [mB, yB] = b.split('/');
-            return new Date(yB, mB - 1).getTime() - new Date(yA, mA - 1).getTime();
-        });
 
     const handleDownloadCSV = () => {
         if (filteredData.length === 0) return;
@@ -648,6 +720,56 @@ export default function PortalParceiro() {
         };
     }, [relatorioUc, data]);
 
+    // Lógica para montar os dados do Relatório de Comissão com as novas somas
+    const relatorioComissaoData = useMemo(() => {
+        if (!comissaoMes || !comissaoParceiro) return null;
+
+        const filtered = data.filter(row => {
+            const isMes = formatMesRef(row.mes_referencia) === comissaoMes;
+            const isParceiro = row.quem_indicou === comissaoParceiro;
+            const isPago = getPaymentBadge(row.status).text === 'Pago';
+            return isMes && isParceiro && isPago;
+        });
+
+        if (filtered.length === 0) return null;
+
+        let consumoTotal = 0;
+        let compensacaoTotal = 0; // Nova soma
+        let boletoTotal = 0; // Nova soma
+        let comissaoTotal = 0;
+
+        const rows = filtered.map(row => {
+            let baseCalc = row.valor_real_cobranca || 0;
+            if (row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM') {
+                baseCalc = Math.max(0, (row.valor_real_cobranca || 0) - (row.valor_fatura_distribuidora || 0));
+            }
+            const perc = comissoes[row.uc] || 0;
+            const comissaoVal = baseCalc * (perc / 100);
+
+            consumoTotal += (row.consumo_kwh || 0);
+            compensacaoTotal += (row.compensacao_kwh || 0); // Cálculo
+            boletoTotal += (row.boleto_simplifica || 0); // Cálculo
+            comissaoTotal += comissaoVal;
+
+            return {
+                ...row,
+                baseCalc,
+                perc,
+                comissaoVal
+            };
+        }).sort((a, b) => a.nome_cliente.localeCompare(b.nome_cliente));
+
+        return {
+            parceiro: comissaoParceiro,
+            mes: comissaoMes,
+            consumoTotal,
+            compensacaoTotal, // Retorno
+            boletoTotal, // Retorno
+            comissaoTotal,
+            rows
+        };
+    }, [data, comissaoMes, comissaoParceiro, comissoes]);
+
     if (analyticsLoading) {
         return (
           <div className="flex flex-col h-screen items-center justify-center bg-slate-950 text-white p-6 relative overflow-hidden">
@@ -711,6 +833,36 @@ export default function PortalParceiro() {
                 </style>
             )}
 
+            {activeTab === 'comissao' && (
+                <style>
+                    {`
+                        @media print {
+                            @page { 
+                                size: A4 landscape; 
+                                margin: 10mm; 
+                            }
+                            
+                            html, body, #root {
+                                background-color: #ffffff !important; 
+                                color: #000000 !important;
+                                -webkit-print-color-adjust: exact !important;
+                                print-color-adjust: exact !important;
+                                height: auto !important;
+                                min-height: 100% !important;
+                                display: block !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                            }
+                            
+                            .print-break-avoid {
+                                page-break-inside: avoid !important;
+                                break-inside: avoid !important;
+                            }
+                        }
+                    `}
+                </style>
+            )}
+
             <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center sticky top-0 z-40 print:hidden">
                 <div className="flex items-center gap-4">
                     <img src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" alt="Simplifica" className="h-8" />
@@ -724,7 +876,8 @@ export default function PortalParceiro() {
                 <div className="flex items-center gap-4">
                     <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800 overflow-x-auto max-w-full">
                         <button onClick={() => setActiveTab('carteira')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'carteira' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><TableIcon size={16}/> Carteira</button>
-                        <button onClick={() => setActiveTab('relatorio')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'relatorio' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><FileText size={16}/> Relatório do Cliente</button>
+                        <button onClick={() => setActiveTab('relatorio')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'relatorio' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><FileText size={16}/> Relatório Cliente</button>
+                        <button onClick={() => setActiveTab('comissao')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'comissao' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><Wallet size={16}/> Relatório Comissão</button>
                         {isAdmin && (
                             <button onClick={() => setActiveTab('gestao')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'gestao' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><KeyRound size={16}/> Senhas</button>
                         )}
@@ -908,7 +1061,6 @@ export default function PortalParceiro() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800/50">
-                                        {/* CORREÇÃO AQUI: A key do map foi alterada para forçar renderizações únicas sempre que o filtro atuar */}
                                         {paginatedData.map((row, index) => {
                                             const badge = getPaymentBadge(row.status);
                                             const isPago = badge.text === 'Pago';
@@ -1299,6 +1451,149 @@ export default function PortalParceiro() {
                                 <FileText size={64} className="opacity-20 mb-4"/>
                                 <p className="text-lg font-bold font-display">Nenhum cliente selecionado</p>
                                 <p className="text-sm">Busque uma UC ou nome no campo acima para gerar o relatório.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ABA DE COMISSÃO ATUALIZADA */}
+                {activeTab === 'comissao' && (
+                    <div className="flex flex-col gap-6 w-full mx-auto print:max-w-[297mm]">
+                        
+                        {/* CONTROLES DE FILTRO ATUALIZADOS */}
+                        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden flex flex-col sm:flex-row gap-4 items-end z-20 max-w-[1100px] w-full mx-auto">
+                            {isAdmin && (
+                                <div className="flex flex-col gap-1 w-full sm:w-[350px]">
+                                    <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider">Selecione o Parceiro</label>
+                                    <SingleSearchSelect
+                                        options={optParceiros}
+                                        selected={comissaoParceiro}
+                                        onChange={setComissaoParceiro}
+                                        placeholder="Selecione..."
+                                        fullWidth={true}
+                                    />
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-1 w-full sm:w-[200px]">
+                                <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider">Mês de Referência</label>
+                                <select
+                                    value={comissaoMes}
+                                    onChange={e => setComissaoMes(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-[#a3e635] transition-all"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {optMes.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                            </div>
+                            
+                            <button 
+                                onClick={() => window.print()}
+                                disabled={!relatorioComissaoData}
+                                className="px-6 py-2.5 bg-[#84cc16] hover:bg-[#65a30d] disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center gap-2 transition-colors ml-auto shadow-[0_0_15px_rgba(132,204,22,0.3)] disabled:shadow-none"
+                            >
+                                <Printer size={18}/> Salvar / Imprimir (PDF)
+                            </button>
+                        </div>
+
+                        {/* CORPO DO RELATÓRIO DE COMISSÃO ATUALIZADO */}
+                        {!relatorioComissaoData ? (
+                            <div className="flex flex-col items-center justify-center p-20 text-slate-500 print:hidden bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-[1100px] mx-auto">
+                                <Wallet size={64} className="opacity-20 mb-4"/>
+                                <p className="text-lg font-bold font-display">Nenhum dado encontrado</p>
+                                <p className="text-sm text-center">Selecione o parceiro e o mês acima, ou verifique se existem faturas pagas neste mês.</p>
+                            </div>
+                        ) : (
+                            <div className="bg-white text-slate-800 p-8 rounded-2xl shadow-xl print:shadow-none print:p-0 w-full max-w-[1100px] mx-auto print:max-w-full page-break-inside-avoid">
+                                
+                                <div className="flex justify-between items-center mb-6">
+                                    <img src="https://www.ludfor.com.br/arquivos/2010a4818c8689275e42d724e5084d4a43400d86.jpg" alt="Simplifica" className="h-16 object-contain" />
+                                    <div className="text-right text-[11px] leading-tight text-slate-600">
+                                        <p className="font-bold text-[#84cc16] text-[13px] mb-1 tracking-wide">CANAL DE PARCEIROS SIMPLIFICA ENERGIA</p>
+                                        <p>(21) 9 7881-2904</p>
+                                        <p>simplificaenergia.com.br</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-[#a3e635] print:bg-[#a3e635] text-white text-center font-bold py-2 text-xl uppercase tracking-widest mb-6 rounded-sm shadow-sm print:shadow-none">
+                                    Relatório de Comissão
+                                </div>
+
+                                {/* LINHA DE RESUMO ATUALIZADA COM COMPENSAÇÃO TOTAL */}
+                                <div className="flex justify-between items-center text-center border-y-2 border-[#a3e635] py-4 mb-8">
+                                    <div className="flex-1 px-2 border-r border-slate-300">
+                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider">Parceiro</p>
+                                        <p className="text-sm font-bold text-slate-700 uppercase">{relatorioComissaoData.parceiro}</p>
+                                    </div>
+                                    <div className="flex-1 px-2 border-r border-slate-300">
+                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider">Consumo Total - kWh</p>
+                                        <p className="text-sm font-bold text-slate-700">{Math.round(relatorioComissaoData.consumoTotal).toLocaleString('pt-BR')}</p>
+                                    </div>
+                                    <div className="flex-1 px-2 border-r border-slate-300">
+                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider whitespace-nowrap">Compensação Total - kWh</p>
+                                        <p className="text-sm font-bold text-slate-700">{Math.round(relatorioComissaoData.compensacaoTotal).toLocaleString('pt-BR')}</p>
+                                    </div>
+                                    <div className="flex-1 px-2 border-r border-slate-300">
+                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider whitespace-nowrap">Total da Comissão</p>
+                                        <p className="text-[15px] font-extrabold text-slate-900">{formatMoney(relatorioComissaoData.comissaoTotal)}</p>
+                                    </div>
+                                    <div className="flex-1 px-2">
+                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider whitespace-nowrap">Mês de Referência</p>
+                                        <p className="text-sm font-bold text-slate-700 uppercase">{relatorioComissaoData.mes}</p>
+                                    </div>
+                                </div>
+
+                                <div className="border-2 border-[#a3e635] rounded-xl p-4 overflow-x-auto">
+                                    <table className="w-full text-[11px] text-left border-collapse">
+                                        <thead>
+                                            {/* CABEÇALHOS ATUALIZADOS: text-[9px], whitespace-nowrap e px-1 */}
+                                            <tr className="text-[#84cc16] border-b border-[#a3e635] text-[9px] whitespace-nowrap px-1">
+                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide whitespace-nowrap">Clientes</th>
+                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide whitespace-nowrap">UC</th>
+                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Consumo Médio</th>
+                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Compensação</th>
+                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-center whitespace-nowrap">Distribuidora</th>
+                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Boleto (R$)</th>
+                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-center whitespace-nowrap">Percentual (%)</th>
+                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Comissão (R$)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-200/60">
+                                            {relatorioComissaoData.rows.map((row, i) => (
+                                                <tr key={i} className="text-slate-600 hover:bg-slate-50 transition-colors">
+                                                    <td className="py-3 px-2 text-left font-bold text-slate-800">{row.nome_cliente}</td>
+                                                    <td className="py-3 px-2 text-left font-mono">{row.uc}</td>
+                                                    <td className="py-3 px-2 text-right">{Math.round(row.consumo_kwh).toLocaleString('pt-BR')} <span className="text-[9px] text-slate-400 font-normal">kWh</span></td>
+                                                    <td className="py-3 px-2 text-right">{Math.round(row.compensacao_kwh).toLocaleString('pt-BR')} <span className="text-[9px] text-slate-400 font-normal">kWh</span></td>
+                                                    <td className="py-3 px-2 text-center text-xs">{row.concessionaria}</td>
+                                                    <td className="py-3 px-2 text-right font-medium">{formatMoney(row.boleto_simplifica)}</td>
+                                                    <td className="py-3 px-2 text-center font-bold text-slate-500">{row.perc > 0 ? `${row.perc}%` : '-'}</td>
+                                                    <td className="py-3 px-2 text-right font-bold text-[#65a30d]">{row.comissaoVal > 0 ? formatMoney(row.comissaoVal) : '-'}</td>
+                                                </tr>
+                                            ))}
+                                            {/* LINHA DE TOTAIS NO FINAL DA TABELA ADICIONADA */}
+                                            <tr className="bg-slate-100 font-bold text-slate-900 border-t-2 border-[#a3e635]">
+                                                <td className="py-3 px-2 text-left" colSpan={2}>
+                                                    Total: <span className="font-medium text-slate-700 ml-2">{relatorioComissaoData.rows.length} UCs</span>
+                                                </td>
+                                                <td className="py-3 px-2 text-right">
+                                                    {Math.round(relatorioComissaoData.consumoTotal).toLocaleString('pt-BR')} <span className="text-[9px] text-slate-500 font-normal">kWh</span>
+                                                </td>
+                                                <td className="py-3 px-2 text-right">
+                                                    {Math.round(relatorioComissaoData.compensacaoTotal).toLocaleString('pt-BR')} <span className="text-[9px] text-slate-500 font-normal">kWh</span>
+                                                </td>
+                                                <td className="py-3 px-2 text-center text-xs"> - </td>
+                                                <td className="py-3 px-2 text-right whitespace-nowrap">
+                                                    {formatMoney(relatorioComissaoData.boletoTotal)}
+                                                </td>
+                                                <td className="py-3 px-2 text-center text-slate-500 font-bold whitespace-nowrap"> - </td>
+                                                <td className="py-3 px-2 text-right text-[#65a30d] whitespace-nowrap">
+                                                    {formatMoney(relatorioComissaoData.comissaoTotal)}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )}
                     </div>

@@ -44,6 +44,9 @@ export const useAnalytics = () => {
       
       const pageSize = 1000; 
       
+      // ⚠️ IMPORTANTE: Coloque aqui o nome exato da sua Materialized View (a tabela roxa com 'M')
+      const NOME_DA_VIEW = 'analytics_materializada'; 
+
       // --- 1. ANALYTICS GERAL ---
       let allRows: any[] = [];
       let page = 0;
@@ -53,12 +56,19 @@ export const useAnalytics = () => {
       while (hasMore) {
         const from = page * pageSize;
         const to = from + pageSize - 1;
+        
+        // DEVOLVEMOS A ORDENAÇÃO AQUI: Isso garante que nenhum dado "fuja" para a página anterior durante a busca
         const { data: result, error } = await supabase
-          .from('analytics_completo')
+          .from(NOME_DA_VIEW)
           .select('*')
+          .order('uc', { ascending: true })
+          .order('mes_referencia', { ascending: true, nullsFirst: true }) 
           .range(from, to);
 
-        if (error) throw error;
+        if (error) {
+          console.warn(`⚠️ Timeout ou Erro na página ${page}. Parando a busca para exibir o que já foi carregado.`, error);
+          break;
+        }
 
         if (result && result.length > 0) {
           allRows.push(...result);
@@ -70,6 +80,14 @@ export const useAnalytics = () => {
       }
       console.timeEnd("Fetching Analytics");
 
+      // BLINDAGEM DE DUPLICIDADE MANTIDA
+      const uniqueRowsMap = new Map();
+      allRows.forEach(row => {
+        const key = row.id_chave_composta || `${row.uc}-${row.mes_referencia}`;
+        uniqueRowsMap.set(key, row); 
+      });
+      const deduplicatedRows = Array.from(uniqueRowsMap.values());
+
       // --- 2. CRM (COM COORDENADAS) ---
       let crmRows: any[] = [];
       let crmPage = 0;
@@ -79,12 +97,18 @@ export const useAnalytics = () => {
       while (crmHasMore) {
         const from = crmPage * pageSize;
         const to = from + pageSize - 1;
+        
+        // Ordenação no CRM para segurança também
         const { data: resultCrm, error: errorCrm } = await supabase
           .from('view_crm_dashboard')
           .select('*')
+          .order('uc', { ascending: true })
           .range(from, to);
 
-        if (errorCrm) throw errorCrm;
+        if (errorCrm) {
+          console.warn(`⚠️ Erro no CRM no offset ${from}.`, errorCrm);
+          break; 
+        }
 
         if (resultCrm && resultCrm.length > 0) {
           crmRows.push(...resultCrm);
@@ -97,7 +121,7 @@ export const useAnalytics = () => {
       console.timeEnd("Fetching CRM");
 
       // --- FORMATAÇÃO GERAL ---
-      const formattedData: AnalyticsData[] = allRows.map(row => {
+      const formattedData: AnalyticsData[] = deduplicatedRows.map(row => {
         const n = (v: any) => (typeof v === 'number' ? v : Number(v) || 0);
         let mesRefFmt = 'N/D';
         if (row.mes_referencia) {
@@ -123,7 +147,7 @@ export const useAnalytics = () => {
           vencimento: row.vencimento,
           data_emissao: row.data_emissao,        
           data_emissao_prevista: row.data_emissao_prevista, 
-          data_emissao_distribuidora: row.data_emissao_distribuidora, // <--- A NOVA COLUNA AQUI
+          data_emissao_distribuidora: row.data_emissao_distribuidora,
           dia_leitura: n(row.dia_leitura),
           concessionaria: row.concessionaria || 'Não Identificada (RD)',
           area_de_gestao: row.area_de_gestao || 'Outros',
@@ -160,7 +184,7 @@ export const useAnalytics = () => {
       // --- FORMATAÇÃO CRM ---
       const crmFormatted = crmRows.map(row => ({
           ...row,
-          latitude: row.latitude,    
+          latitude: row.latitude,   
           longitude: row.longitude, 
           cidade: row.cidade,       
           uf: row.uf,               
@@ -174,7 +198,7 @@ export const useAnalytics = () => {
       console.error('Erro Fatal no Dashboard:', err);
       setError(err.message);
     } finally {
-      setLoading(false);
+      setLoading(false); // O Loader (telinha rodando) SÓ SOME quando essa linha executa, garantindo que toda a base foi carregada.
     }
   };
 

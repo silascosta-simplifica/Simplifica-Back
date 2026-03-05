@@ -6,6 +6,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+# 1. NOVOS IMPORTS NECESSÁRIOS PARA O RETRY
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 load_dotenv()
 
 RD_TOKEN = os.getenv("RD_TOKEN")
@@ -18,12 +22,26 @@ if not RD_TOKEN or not DB_URL:
 
 engine = create_engine(DB_URL)
 
+# --- 2. CONFIGURANDO A SESSÃO COM RETRY AUTOMÁTICO ---
+session = requests.Session()
+retry = Retry(
+    total=5,             # Tenta até 5 vezes antes de falhar
+    backoff_factor=2,    # Espera 2s, 4s, 8s entre as tentativas (evita sobrecarregar a API)
+    status_forcelist=[429, 500, 502, 503, 504], # Erros de servidor que disparam o retry
+    allowed_methods=["GET"]
+)
+adapter = HTTPAdapter(max_retries=retry)
+session.mount("http://", adapter)
+session.mount("https://", adapter)
+# -----------------------------------------------------
+
 # --- MAPA DE OBJETIVOS ---
 def buscar_mapa_objetivos():
     print("🔎 Mapeando objetivos das etapas...")
     try:
         url = f"{RD_URL}/deal_pipelines?token={RD_TOKEN}"
-        resp = requests.get(url)
+        # 3. USANDO A SESSÃO E ADICIONANDO TIMEOUT
+        resp = session.get(url, timeout=30) 
         if resp.status_code != 200: return {}
         
         mapa = {}
@@ -112,8 +130,12 @@ def executar_sync_rd():
         print(f"🔄 Baixando pág {page}...", end='\r')
         try:
             url = f"{RD_URL}/deals?token={RD_TOKEN}&page={page}&limit=200&sort=updated_at&direction=desc"
-            resp = requests.get(url)
+            
+            # 4. USANDO A SESSÃO E ADICIONANDO TIMEOUT AQUI TAMBÉM
+            resp = session.get(url, timeout=30)
+            
             if resp.status_code != 200: 
+                print(f"\n❌ Erro HTTP {resp.status_code} na página {page}.")
                 sucesso_total = False
                 break
                 
@@ -165,7 +187,7 @@ def executar_sync_rd():
             time.sleep(0.2)
             
         except Exception as e:
-            print(f"\n❌ Erro na página {page}: {e}")
+            print(f"\n❌ Falha fatal na página {page} mesmo após retentativas: {e}")
             sucesso_total = False
             break 
             
