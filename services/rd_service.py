@@ -2,11 +2,14 @@ import os
 import time
 import requests
 import json
+import csv
+import re
+from io import StringIO
 from datetime import datetime
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-# 1. NOVOS IMPORTS NECESSÁRIOS PARA O RETRY
+# 1. IMPORTS NECESSÁRIOS PARA O RETRY
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -35,20 +38,127 @@ session.mount("http://", adapter)
 session.mount("https://", adapter)
 # -----------------------------------------------------
 
-# --- MAPA DE OBJETIVOS ---
+# =====================================================
+# SINCRONIZAR REGRAS DO GOOGLE SHEETS
+# =====================================================
+def sincronizar_regras_google_sheets():
+    print("📊 Baixando regras de comissão do Google Sheets (Espelho)...")
+    
+    PLANILHA_ESPELHO_ID = "1plZVHD9w0gznHmvIzDo5kzutFrMSm6n770AfsiQcx44"
+    url_csv = f"https://docs.google.com/spreadsheets/d/{PLANILHA_ESPELHO_ID}/export?format=csv&gid=0"
+    
+    try:
+        resp = session.get(url_csv, timeout=30)
+        resp.encoding = 'utf-8' 
+        
+        if resp.status_code != 200:
+            print(f"❌ Erro ao baixar o Sheets: HTTP {resp.status_code}")
+            return False
+            
+        if "<html" in resp.text[:50].lower() or "<!doctype html>" in resp.text[:50].lower():
+            print("❌ ERRO DE PERMISSÃO: A planilha não está pública!")
+            return False
+            
+        arquivo_csv = StringIO(resp.text)
+        leitor = csv.DictReader(arquivo_csv)
+        
+        lista_regras = []
+        
+        for linha in leitor:
+            linha_limpa = {}
+            for k, v in linha.items():
+                if k is not None:
+                    chave_limpa = re.sub(r'\s+', ' ', str(k)).strip()
+                    linha_limpa[chave_limpa] = v
+            
+            razao_social = linha_limpa.get('Razão Social')
+            
+            if not razao_social or str(razao_social).strip() == "":
+                continue
+                
+            def limpar_num(val):
+                if not val or str(val).strip() == "": return None
+                return float(str(val).replace('%', '').replace(',', '.').strip())
+                
+            def limpar_data(val):
+                if not val or str(val).strip() == "": return None
+                partes = str(val).split('/')
+                if len(partes) == 3: return f"{partes[2]}-{partes[1]}-{partes[0]}"
+                return None
+
+            lista_regras.append({
+                "razao_social": str(razao_social).strip(),
+                "tipo": str(linha_limpa.get('Tipo', '')).strip().upper(),
+                "perc_padrao": limpar_num(linha_limpa.get('% Padrão')),
+                "perc_rge": limpar_num(linha_limpa.get('RGE')),
+                "perc_celesc": limpar_num(linha_limpa.get('CELESC')),
+                "perc_copel": limpar_num(linha_limpa.get('COPEL')),
+                "perc_cemig": limpar_num(linha_limpa.get('CEMIG')),
+                "perc_eqto_go": limpar_num(linha_limpa.get('EQTO-GO')),
+                "perc_ceee": limpar_num(linha_limpa.get('CEEE')),
+                "perc_personal": limpar_num(linha_limpa.get('% Personal')),
+                "fixo_perc_assinatura": limpar_num(linha_limpa.get('Fixo - % Assinatura')),
+                "fixo_perc_comp": limpar_num(linha_limpa.get('Fixo - % 1ª Comp.')), 
+                "fixo_fidel_perc_assinatura": limpar_num(linha_limpa.get('Fixo FIDEL - % Assinatura')),
+                "fixo_fidel_perc_comp": limpar_num(linha_limpa.get('Fixo FIDEL - % Comp.')),
+                "estagio_1_ate": limpar_num(linha_limpa.get('Estágio 1 (Até kWh)')),
+                "estagio_1_perc": limpar_num(linha_limpa.get('Estágio 1 (%)')),
+                "estagio_2_ate": limpar_num(linha_limpa.get('Estágio 2 (Até kWh)')),
+                "estagio_2_perc": limpar_num(linha_limpa.get('Estágio 2 (%)')),
+                "estagio_3_acima": limpar_num(linha_limpa.get('Estágio 3 (Acima)')),
+                "estagio_3_perc": limpar_num(linha_limpa.get('Estágio 3 (%)')),
+                "regra_antiga_ate": limpar_data(linha_limpa.get('Regra Antiga (Até)')),
+                "regra_antiga_perc": limpar_num(linha_limpa.get('Regra Antiga (%)'))
+            })
+
+        if len(lista_regras) > 0:
+            with engine.begin() as conn:
+                conn.execute(text("TRUNCATE TABLE regras_comissao;"))
+                
+                stmt = text("""
+                    INSERT INTO regras_comissao (
+                        razao_social, tipo, perc_padrao, perc_rge, perc_celesc, perc_copel, 
+                        perc_cemig, perc_eqto_go, perc_ceee, perc_personal, fixo_perc_assinatura, fixo_perc_comp, 
+                        fixo_fidel_perc_assinatura, fixo_fidel_perc_comp, estagio_1_ate, estagio_1_perc, 
+                        estagio_2_ate, estagio_2_perc, estagio_3_acima, estagio_3_perc, 
+                        regra_antiga_ate, regra_antiga_perc
+                    ) VALUES (
+                        :razao_social, :tipo, :perc_padrao, :perc_rge, :perc_celesc, :perc_copel, 
+                        :perc_cemig, :perc_eqto_go, :perc_ceee, :perc_personal, :fixo_perc_assinatura, :fixo_perc_comp, 
+                        :fixo_fidel_perc_assinatura, :fixo_fidel_perc_comp, :estagio_1_ate, :estagio_1_perc, 
+                        :estagio_2_ate, :estagio_2_perc, :estagio_3_acima, :estagio_3_perc, 
+                        :regra_antiga_ate, :regra_antiga_perc
+                    )
+                """)
+                conn.execute(stmt, lista_regras)
+            print(f"✅ Tabela de regras atualizada! {len(lista_regras)} parceiros lidos da planilha.")
+            return True
+        else:
+            print("⚠️ AVISO: O código não encontrou linhas válidas com 'Razão Social'.")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro ao processar Google Sheets: {e}")
+        return False
+# =====================================================
+
+# --- MAPA DE OBJETIVOS E FUNIS ---
 def buscar_mapa_objetivos():
-    print("🔎 Mapeando objetivos das etapas...")
+    print("🔎 Mapeando objetivos e funis das etapas...")
     try:
         url = f"{RD_URL}/deal_pipelines?token={RD_TOKEN}"
-        # 3. USANDO A SESSÃO E ADICIONANDO TIMEOUT
         resp = session.get(url, timeout=30) 
         if resp.status_code != 200: return {}
         
         mapa = {}
         pipelines = resp.json()
         for pipe in pipelines:
+            nome_funil = pipe.get('name', '')
             for stage in pipe.get('deal_stages', []):
-                mapa[stage['id']] = stage.get('objective', '')
+                mapa[stage['id']] = {
+                    'objetivo': stage.get('objective', ''),
+                    'funil': nome_funil
+                }
         return mapa
     except Exception as e:
         print(f"⚠️ Erro ao buscar pipelines: {e}")
@@ -95,12 +205,15 @@ def processar_negocio(deal):
     dia_leitura = limpar_inteiro(campos.get('Data de leitura estimada (Dia)'))
 
     stage_id = deal.get('deal_stage', {}).get('id')
-    objetivo_etapa = MAPA_OBJETIVOS.get(stage_id, '')
+    info_etapa = MAPA_OBJETIVOS.get(stage_id, {})
+    objetivo_etapa = info_etapa.get('objetivo', '')
+    nome_funil = info_etapa.get('funil', '')
 
     return {
         "id_negocio": deal.get('id'),
         "uc": uc,
         "nome_negocio": deal.get('name'),
+        "funil": nome_funil,
         "concessionaria": concessionaria, 
         "area_de_gestao": campos.get('Área de Gestão') or campos.get('Geração Compartilhada'),
         "status_rd": deal.get('deal_stage', {}).get('name'),
@@ -115,7 +228,7 @@ def processar_negocio(deal):
     }
 
 def executar_sync_rd():
-    print("🚀 Iniciando Sync RD (Com Objetivos e Limpeza de Deletados)...")
+    print("🚀 Iniciando Sync RD (Com Funil, Objetivos e Limpeza de Deletados)...")
     
     page = 1
     has_more = True
@@ -123,15 +236,12 @@ def executar_sync_rd():
     
     # 1. SACOLA DE IDs ATIVOS
     ids_ativos_rd = set() 
-    
-    sucesso_total = True # Trava de segurança para não deletar nada se a API falhar no meio
+    sucesso_total = True # Trava de segurança
     
     while has_more:
         print(f"🔄 Baixando pág {page}...", end='\r')
         try:
             url = f"{RD_URL}/deals?token={RD_TOKEN}&page={page}&limit=200&sort=updated_at&direction=desc"
-            
-            # 4. USANDO A SESSÃO E ADICIONANDO TIMEOUT AQUI TAMBÉM
             resp = session.get(url, timeout=30)
             
             if resp.status_code != 200: 
@@ -146,26 +256,24 @@ def executar_sync_rd():
                 
             lista = []
             for deal in deals:
-                # 2. GUARDA O ID NA SACOLA
                 ids_ativos_rd.add(deal.get('id'))
-                
-                dado = processar_negocio(deal)
-                lista.append(dado)
+                lista.append(processar_negocio(deal))
             
             if lista:
                 stmt = text("""
                     INSERT INTO raw_rd_station (
-                        id_negocio, uc, nome_negocio, concessionaria, area_de_gestao, 
+                        id_negocio, uc, nome_negocio, funil, concessionaria, area_de_gestao, 
                         status_rd, objetivo_etapa, data_ganho, data_protocolo, data_cancelamento, 
                         consumo_medio_mwh, dia_leitura, json_completo, updated_at
                     )
                     VALUES (
-                        :id_negocio, :uc, :nome_negocio, :concessionaria, :area_de_gestao, 
+                        :id_negocio, :uc, :nome_negocio, :funil, :concessionaria, :area_de_gestao, 
                         :status_rd, :objetivo_etapa, :data_ganho, :data_protocolo, :data_cancelamento, 
                         :consumo_medio_mwh, :dia_leitura, :json_completo, :updated_at
                     )
                     ON CONFLICT (id_negocio) DO UPDATE SET
                         uc = EXCLUDED.uc,
+                        funil = EXCLUDED.funil,
                         concessionaria = EXCLUDED.concessionaria,
                         status_rd = EXCLUDED.status_rd,
                         objetivo_etapa = EXCLUDED.objetivo_etapa,
@@ -198,16 +306,12 @@ def executar_sync_rd():
         print("🧹 Iniciando limpeza de negócios deletados...")
         try:
             with engine.begin() as conn:
-                # Puxa todos os IDs que estão hoje no banco
                 result = conn.execute(text("SELECT id_negocio FROM raw_rd_station")).fetchall()
                 ids_no_banco = {row[0] for row in result}
                 
-                # Descobre quem está no banco mas NÃO está mais no RD Station
                 ids_para_deletar = ids_no_banco - ids_ativos_rd
                 
                 if ids_para_deletar:
-                    # Deleta os fantasmas
-                    # Converte o set para tupla para o SQLAlchemy entender a lista no "IN"
                     stmt_delete = text("DELETE FROM raw_rd_station WHERE id_negocio IN :ids_fantasmas")
                     conn.execute(stmt_delete, {"ids_fantasmas": tuple(ids_para_deletar)})
                     print(f"🗑️  Limpeza concluída! {len(ids_para_deletar)} registros deletados do banco.")
@@ -219,4 +323,5 @@ def executar_sync_rd():
         print("⚠️ A limpeza foi ignorada porque houve falha ao baixar os dados ou a lista veio vazia.")
 
 if __name__ == "__main__":
+    sincronizar_regras_google_sheets()
     executar_sync_rd()

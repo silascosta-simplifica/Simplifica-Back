@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import type { AnalyticsData } from '../types';
 
-export const useAnalytics = () => {
+export const useAnalytics = (parceiroLogado?: string, isAdmin: boolean = true) => {
   const [data, setData] = useState<AnalyticsData[]>([]);
   const [crmData, setCrmData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -11,30 +11,72 @@ export const useAnalytics = () => {
 
   useEffect(() => {
     fetchAllData();
-  }, []);
+  }, [parceiroLogado, isAdmin]);
 
   const refreshSnapshot = async () => {
     try {
       setRefreshing(true);
-      console.log("🔄 Solicitando atualização da Materialized View...");
       const { error } = await supabase.rpc('refresh_analytics');
-      
-      if (error) {
-        console.error("Erro RPC:", error);
-        if (error.message && (error.message.includes('timeout') || error.message.includes('canceling statement'))) {
-            throw new Error("O banco de dados demorou para responder. Tente novamente em 1 minuto.");
-        }
-        throw error;
-      }
-      
-      console.log("✅ View atualizada! Recarregando dados...");
+      if (error) throw error;
       await fetchAllData(); 
     } catch (err: any) {
-      console.error("Erro ao atualizar snapshot:", err);
       alert("Aviso: " + err.message);
     } finally {
       setRefreshing(false);
     }
+  };
+
+  // --- FUNÇÃO AJUDANTE PARA BAIXAR DADOS EM PARALELO (TURBO) ---
+  const fetchTableInParallel = async (
+      tableName: string, 
+      selectCols: string, 
+      pageSize: number, 
+      applyOrder: boolean, 
+      partnerFilter?: string
+  ) => {
+      // 1. Descobre o total de registros primeiro
+      let countQuery = supabase.from(tableName).select('*', { count: 'estimated', head: true });
+      if (partnerFilter && !isAdmin) {
+          countQuery = countQuery.eq('quem_indicou', partnerFilter);
+      }
+      
+      const { count, error: countError } = await countQuery;
+      
+      if (countError) {
+          console.error(`Erro ao contar registros da tabela ${tableName}:`, countError);
+          return []; // Retorna vazio em vez de quebrar silenciosamente
+      }
+      
+      if (!count || count === 0) return [];
+
+      const totalPages = Math.ceil(count / pageSize);
+      const allData: any[] = [];
+      const concurrency = 4; // Faz 4 requisições simultâneas para não travar o navegador
+
+      // 2. Dispara os blocos de busca em paralelo
+      for (let i = 0; i < totalPages; i += concurrency) {
+          const promises = [];
+          for (let j = 0; j < concurrency && (i + j) < totalPages; j++) {
+              const from = (i + j) * pageSize;
+              const to = from + pageSize - 1;
+              
+              let q = supabase.from(tableName).select(selectCols).range(from, to);
+              if (applyOrder) q = q.order('uc', { ascending: true });
+              if (partnerFilter && !isAdmin) q = q.eq('quem_indicou', partnerFilter);
+              
+              promises.push(q);
+          }
+
+          // Espera o bloco atual terminar antes de puxar o próximo
+          const results = await Promise.all(promises);
+          results.forEach(res => {
+              if (res.error) {
+                  console.error(`Falha no bloco de dados da tabela ${tableName}:`, res.error);
+              }
+              if (res.data) allData.push(...res.data);
+          });
+      }
+      return allData;
   };
 
   const fetchAllData = async () => {
@@ -42,45 +84,28 @@ export const useAnalytics = () => {
       setLoading(true);
       setError(null);
       
+      // TAMANHO DO PACOTE AJUSTADO PARA EVITAR TIMEOUT 500
       const pageSize = 1000; 
       
-      // ⚠️ IMPORTANTE: Coloque aqui o nome exato da sua Materialized View (a tabela roxa com 'M')
-      const NOME_DA_VIEW = 'analytics_materializada'; 
+      console.time("⏳ Download Total Administrativo");
 
-      // --- 1. ANALYTICS GERAL ---
-      let allRows: any[] = [];
-      let page = 0;
-      let hasMore = true;
+      // BAIXA AS 3 TABELAS AO MESMO TEMPO EM PARALELO!
+      const [allRows, comissoesRows, crmRows] = await Promise.all([
+          // 1. Analytics Geral
+          fetchTableInParallel('analytics_materializada', '*', pageSize, true, parceiroLogado),
+          
+          // 2. Comissões (SEM o parceiroLogado aqui para evitar quebra caso a view não tenha a coluna 'quem_indicou')
+          fetchTableInParallel('view_comissoes_calculadas', 'uc, percentual_final, percentual_personal', pageSize, true),
+          
+          // 3. CRM
+          (!isAdmin && parceiroLogado) 
+              ? Promise.resolve([]) 
+              : fetchTableInParallel('view_crm_dashboard', '*', pageSize, true)
+      ]);
 
-      console.time("Fetching Analytics");
-      while (hasMore) {
-        const from = page * pageSize;
-        const to = from + pageSize - 1;
-        
-        // DEVOLVEMOS A ORDENAÇÃO AQUI: Isso garante que nenhum dado "fuja" para a página anterior durante a busca
-        const { data: result, error } = await supabase
-          .from(NOME_DA_VIEW)
-          .select('*')
-          .order('uc', { ascending: true })
-          .order('mes_referencia', { ascending: true, nullsFirst: true }) 
-          .range(from, to);
+      console.timeEnd("⏳ Download Total Administrativo");
 
-        if (error) {
-          console.warn(`⚠️ Timeout ou Erro na página ${page}. Parando a busca para exibir o que já foi carregado.`, error);
-          break;
-        }
-
-        if (result && result.length > 0) {
-          allRows.push(...result);
-          if (result.length < pageSize) hasMore = false;
-          else page++;
-        } else {
-          hasMore = false;
-        }
-      }
-      console.timeEnd("Fetching Analytics");
-
-      // BLINDAGEM DE DUPLICIDADE MANTIDA
+      // --- DEDUPLICAÇÃO E MAPS ---
       const uniqueRowsMap = new Map();
       allRows.forEach(row => {
         const key = row.id_chave_composta || `${row.uc}-${row.mes_referencia}`;
@@ -88,39 +113,18 @@ export const useAnalytics = () => {
       });
       const deduplicatedRows = Array.from(uniqueRowsMap.values());
 
-      // --- 2. CRM (COM COORDENADAS) ---
-      let crmRows: any[] = [];
-      let crmPage = 0;
-      let crmHasMore = true;
+      const comissoesMap = new Map();
+      comissoesRows.forEach(c => {
+          if (c.uc) {
+              // Garante que é string e remove espaços em branco para a junção funcionar 100%
+              comissoesMap.set(String(c.uc).trim(), {
+                  final: c.percentual_final || 0,
+                  personal: c.percentual_personal || 0
+              });
+          }
+      });
 
-      console.time("Fetching CRM");
-      while (crmHasMore) {
-        const from = crmPage * pageSize;
-        const to = from + pageSize - 1;
-        
-        // Ordenação no CRM para segurança também
-        const { data: resultCrm, error: errorCrm } = await supabase
-          .from('view_crm_dashboard')
-          .select('*')
-          .order('uc', { ascending: true })
-          .range(from, to);
-
-        if (errorCrm) {
-          console.warn(`⚠️ Erro no CRM no offset ${from}.`, errorCrm);
-          break; 
-        }
-
-        if (resultCrm && resultCrm.length > 0) {
-          crmRows.push(...resultCrm);
-          if (resultCrm.length < pageSize) crmHasMore = false;
-          else crmPage++;
-        } else {
-          crmHasMore = false;
-        }
-      }
-      console.timeEnd("Fetching CRM");
-
-      // --- FORMATAÇÃO GERAL ---
+      // --- 4. FORMATAÇÃO DOS DADOS ---
       const formattedData: AnalyticsData[] = deduplicatedRows.map(row => {
         const n = (v: any) => (typeof v === 'number' ? v : Number(v) || 0);
         let mesRefFmt = 'N/D';
@@ -128,6 +132,10 @@ export const useAnalytics = () => {
             const parts = row.mes_referencia.split('-');
             if (parts.length >= 2) mesRefFmt = `${parts[1]}/${parts[0]}`;
         }
+
+        // Pega a comissão limpa do banco de dados garantindo a leitura via String sem espaços
+        const safeUc = row.uc ? String(row.uc).trim() : '';
+        const comissaoInfo = comissoesMap.get(safeUc) || { final: 0, personal: 0 };
 
         return {
           ...row, 
@@ -159,6 +167,10 @@ export const useAnalytics = () => {
           codigo_barras: row.codigo_barras,
           codigo_pix: row.codigo_pix,
           mes_referencia: row.mes_referencia,
+          
+          percentual_comissao: comissaoInfo.final, 
+          percentual_personal: comissaoInfo.personal,
+
           "mês_referência": mesRefFmt,
           "concessionária": row.concessionaria || 'Outra',
           "área_de_gestão": row.area_de_gestao || 'Outros',
@@ -173,7 +185,6 @@ export const useAnalytics = () => {
           tarifa_estimada: n(row.tarifa_estimada),
           tarifa_real: n(row.tarifa_real),
           eficiencia_compensacao: n(row.eficiencia_compensacao),
-
           perc_desconto: n(row.perc_desconto),
           natureza_cliente: row.natureza_cliente || 'Outros',
           grupo_tarifario: row.grupo_tarifario || 'N/D',
@@ -181,13 +192,12 @@ export const useAnalytics = () => {
         };
       });
 
-      // --- FORMATAÇÃO CRM ---
       const crmFormatted = crmRows.map(row => ({
           ...row,
           latitude: row.latitude,   
           longitude: row.longitude, 
-          cidade: row.cidade,       
-          uf: row.uf,               
+          cidade: row.cidade,        
+          uf: row.uf,                
           cep_norm: row.cep_uc ? String(row.cep_uc).replace(/\D/g, '') : null
       }));
 
@@ -198,7 +208,7 @@ export const useAnalytics = () => {
       console.error('Erro Fatal no Dashboard:', err);
       setError(err.message);
     } finally {
-      setLoading(false); // O Loader (telinha rodando) SÓ SOME quando essa linha executa, garantindo que toda a base foi carregada.
+      setLoading(false); 
     }
   };
 

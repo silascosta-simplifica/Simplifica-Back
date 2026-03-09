@@ -147,7 +147,7 @@ export default function PortalParceiro() {
     const parceiroLogado = localStorage.getItem('@Simplifica:parceiroLogado') || '';
     const isAdmin = parceiroLogado === 'admin';
 
-    const { data: rawData, loading: analyticsLoading } = useAnalytics();
+    const { data: rawData, loading: analyticsLoading } = useAnalytics(parceiroLogado, isAdmin);
 
     const [activeTab, setActiveTab] = useState<'carteira' | 'gestao' | 'relatorio' | 'comissao'>('carteira');
     
@@ -173,8 +173,6 @@ export default function PortalParceiro() {
     const [codigosAsaas, setCodigosAsaas] = useState<Record<string, { pix?: string, barcode?: string, loading?: boolean, error?: string }>>({});
     const [isBulkLoading, setIsBulkLoading] = useState(false);
     const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
-
-    const [comissoes, setComissoes] = useState<Record<string, number>>({});
     
     const [relatorioUc, setRelatorioUc] = useState<string>('');
     const [buscaRelatorio, setBuscaRelatorio] = useState('');
@@ -191,54 +189,6 @@ export default function PortalParceiro() {
         };
         document.addEventListener('mousedown', handleClickOutsideDropdown);
         return () => document.removeEventListener('mousedown', handleClickOutsideDropdown);
-    }, []);
-
-    useEffect(() => {
-        const fetchPlanilhaComissoes = async () => {
-            try {
-                const sheetId = '1eXq0INVIaa2GFx-xvA4SgS9T4hDrFYflhXwVn-CPDa0';
-                const gid = '573005863'; 
-                const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`;
-                
-                const response = await fetch(url);
-                const csvText = await response.text();
-                
-                const parseCSVLine = (text: string) => {
-                    const row: string[] = [];
-                    let inQuotes = false;
-                    let currentVal = '';
-                    for (let i = 0; i < text.length; i++) {
-                        const char = text[i];
-                        if (char === '"') inQuotes = !inQuotes;
-                        else if (char === ',' && !inQuotes) { row.push(currentVal.trim()); currentVal = ''; }
-                        else currentVal += char;
-                    }
-                    row.push(currentVal.trim());
-                    return row;
-                };
-
-                const lines = csvText.split('\n');
-                const mapaComissoes: Record<string, number> = {};
-                
-                lines.slice(1).forEach(line => {
-                    const cols = parseCSVLine(line);
-                    if(cols.length >= 3) {
-                        const uc = cols[0];
-                        const percStr = cols[2].replace('%', '').replace(',', '.').trim();
-                        const perc = parseFloat(percStr);
-                        if(uc && !isNaN(perc)) {
-                            mapaComissoes[uc] = perc;
-                        }
-                    }
-                });
-
-                setComissoes(mapaComissoes);
-            } catch (err) {
-                console.error("Erro ao carregar a planilha de comissões.", err);
-            }
-        };
-
-        fetchPlanilhaComissoes();
     }, []);
 
     useEffect(() => {
@@ -293,6 +243,48 @@ export default function PortalParceiro() {
             
         } catch (err: any) {
             alert(`Falha ao buscar ${type}. Detalhe: ${err.message}`);
+        } finally {
+            setBtnLoading(buttonId, false);
+        }
+    };
+
+    // NOVA FUNÇÃO: Faz o download via API da Lumi em Base64 e converte em arquivo local
+    const handleDownloadBoletoLumi = async (uc: string, mesRef: string, buttonId: string) => {
+        if (!uc || !mesRef) return;
+        setBtnLoading(buttonId, true);
+        
+        try {
+            const { data, error } = await supabase.functions.invoke('lumi-boleto', {
+                body: { uc, mes_referencia: mesRef }
+            });
+
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+
+            // Converte o Base64 de volta para um arquivo PDF físico
+            const byteCharacters = atob(data.pdfBase64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'application/pdf' });
+
+            // Cria um link temporário e força o download local no navegador
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            
+            const safeMesRef = String(mesRef).replace('/', '-');
+            link.setAttribute('download', `Boleto_${uc}_${safeMesRef}.pdf`);
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+        } catch (err: any) {
+            alert(`Falha ao buscar Boleto na Lumi. Detalhe: ${err.message}`);
         } finally {
             setBtnLoading(buttonId, false);
         }
@@ -410,7 +402,11 @@ export default function PortalParceiro() {
 
     const data = useMemo(() => {
         if (!rawData) return [];
-        const parseNum = (val: any) => (val === null || val === undefined || val === '') ? 0 : (isNaN(Number(val)) ? 0 : Number(val));
+        const parseNum = (val: any) => {
+            if (val === null || val === undefined || val === '') return 0;
+            const strVal = String(val).replace(',', '.');
+            return isNaN(Number(strVal)) ? 0 : Number(strVal);
+        };
         const hoje = new Date();
         const anoAtual = hoje.getFullYear();
         const mesAtual = hoje.getMonth() + 1; 
@@ -424,7 +420,7 @@ export default function PortalParceiro() {
             objetivo_etapa: d.objetivo_etapa || 'Sem Etapa',
             status: d.status || d['Status Pagamento'],
             quem_indicou: d.quem_indicou || 'Sem Parceiro',
-            valor_real_cobranca: parseNum(d.valor_real_cobranca),
+            valor_real_cobranca: parseNum(d.total_cobranca) || parseNum(d.valor_real_cobranca),
             valor_fatura_distribuidora: parseNum(d.valor_fatura_distribuidora),
             is_consorcio: d.is_consorcio || 'Não',
             fonte_dados: d.fonte_dados, 
@@ -444,7 +440,8 @@ export default function PortalParceiro() {
             codigo_barras: d.codigo_barras,
             asaas_id: d.asaas_id,
             id_chave_composta: d.id_chave_composta || `${d.uc}-${d['mês_referência']}`,
-            link_boleto: d.link_boleto || d.link_fatura || d.l_link || d.u_link || null
+            link_boleto: d.link_boleto || d.link_fatura || d.l_link || d.u_link || null,
+            percentual_comissao: parseNum(d.percentual_comissao)
         }));
 
         dadosTratados = dadosTratados.filter((d: any) => {
@@ -533,11 +530,12 @@ export default function PortalParceiro() {
 
             const badge = getPaymentBadge(row.status);
             if (badge.text === 'Pago') {
-                let baseCalculoComissao = row.valor_real_cobranca || 0;
+                let baseCalculoComissao = row.valor_real_cobranca || row.boleto_simplifica || 0;
                 if (row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM') {
-                    baseCalculoComissao = Math.max(0, (row.valor_real_cobranca || 0) - (row.valor_fatura_distribuidora || 0));
+                    baseCalculoComissao = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
                 }
-                const perc = comissoes[row.uc] || 0;
+                
+                const perc = row.percentual_comissao || 0;
                 acc.comissao += (baseCalculoComissao * (perc / 100));
             }
 
@@ -545,7 +543,7 @@ export default function PortalParceiro() {
         }, { consumo: 0, compensacao: 0, boleto: 0, economia: 0, comissao: 0, saldoAtual: 0 });
 
         return { ...totals, totalUcs: uniqueUcs.size };
-    }, [filteredData, comissoes]);
+    }, [filteredData]);
 
     const paginatedData = filteredData.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
     const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
@@ -588,13 +586,13 @@ export default function PortalParceiro() {
                 row.boleto_simplifica
             );
 
-            const perc = comissoes[row.uc] || 0;
+            const perc = row.percentual_comissao || 0;
             let comissaoTotal = 0;
             
             if (isPago) {
-                let baseCalc = row.valor_real_cobranca || 0;
+                let baseCalc = row.valor_real_cobranca || row.boleto_simplifica || 0;
                 if (row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM') {
-                    baseCalc = Math.max(0, (row.valor_real_cobranca || 0) - (row.valor_fatura_distribuidora || 0));
+                    baseCalc = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
                 }
                 comissaoTotal = baseCalc * (perc / 100);
             }
@@ -735,11 +733,12 @@ export default function PortalParceiro() {
         let comissaoTotal = 0;
 
         const rows = filtered.map(row => {
-            let baseCalc = row.valor_real_cobranca || 0;
+            let baseCalc = row.valor_real_cobranca || row.boleto_simplifica || 0;
             if (row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM') {
-                baseCalc = Math.max(0, (row.valor_real_cobranca || 0) - (row.valor_fatura_distribuidora || 0));
+                baseCalc = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
             }
-            const perc = comissoes[row.uc] || 0;
+            
+            const perc = row.percentual_comissao || 0;
             const comissaoVal = baseCalc * (perc / 100);
 
             consumoTotal += (row.consumo_kwh || 0);
@@ -764,7 +763,7 @@ export default function PortalParceiro() {
             comissaoTotal,
             rows
         };
-    }, [data, comissaoMes, comissaoParceiro, comissoes]);
+    }, [data, comissaoMes, comissaoParceiro]);
 
     if (analyticsLoading) {
         return (
@@ -787,7 +786,6 @@ export default function PortalParceiro() {
     }
 
     return (
-        // NOTA: Adicionado "print:bg-white print:min-h-0" no wrapper principal para remover o fundo preto
         <div className="min-h-screen print:min-h-0 bg-slate-950 print:bg-white text-white print:text-black font-sans flex flex-col">
             
             {activeTab === 'relatorio' && (
@@ -885,11 +883,10 @@ export default function PortalParceiro() {
                 </div>
             </header>
 
-            {/* NOTA: Adicionado "print:bg-white" também na tag main */}
             <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto print:p-0 print:m-0 print:block print:bg-white">
                 
                 {activeTab === 'carteira' && (
-                    <div className="print:hidden space-y-6">
+                    <div className="print:hidden space-y-6 flex-1 flex flex-col">
                         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 animate-in fade-in zoom-in duration-300">
                             
                             <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
@@ -998,7 +995,7 @@ export default function PortalParceiro() {
                             </div>
                         </section>
 
-                        <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden flex flex-col flex-1">
+                        <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden flex flex-col flex-1 min-h-[600px]">
                             <div className="p-4 border-b border-slate-800 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-900/50">
                                 <h2 className="font-display font-bold text-white flex items-center gap-2"><TableIcon className="text-yellow-500" size={20}/> Tabela de Acompanhamento</h2>
                                 <div className="flex flex-wrap items-center gap-3">
@@ -1027,9 +1024,9 @@ export default function PortalParceiro() {
                                 </div>
                             </div>
 
-                            <div className="overflow-x-auto min-h-[400px]">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold border-b border-slate-800 whitespace-nowrap">
+                            <div className="overflow-x-auto flex-1 max-h-[calc(100vh-320px)] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700">
+                                <table className="w-full text-sm text-left sticky-header">
+                                    <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold border-b border-slate-800 whitespace-nowrap sticky top-0 z-10">
                                         <tr>
                                             <th className="px-5 py-4 text-left min-w-[280px]">UC / Cliente</th>
                                             {colunasAtivas.includes('Ações (Links)') && <th className="px-5 py-4 text-center">Ações (Links)</th>}
@@ -1129,15 +1126,15 @@ export default function PortalParceiro() {
                                                                     >
                                                                         {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
                                                                     </button>
-                                                                ) : linkBoletoLumiDireto ? (
-                                                                    <a 
-                                                                        href={linkBoletoLumiDireto} 
-                                                                        target="_blank" rel="noopener noreferrer" 
-                                                                        title="Boleto Simplifica (Lumi)" 
-                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors flex items-center justify-center"
+                                                                ) : row.fonte_dados === 'LUMI' ? (
+                                                                    <button 
+                                                                        onClick={() => handleDownloadBoletoLumi(row.uc, row.mes_referencia, `btn_bol_${chaveLinha}`)}
+                                                                        disabled={loadingDownloads[`btn_bol_${chaveLinha}`]}
+                                                                        title="Boleto Simplifica (Gerar via Lumi)" 
+                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50 flex items-center justify-center"
                                                                     >
-                                                                        <Receipt size={16} />
-                                                                    </a>
+                                                                        {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
+                                                                    </button>
                                                                 ) : (
                                                                     <div title="Link de cobrança não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed">
                                                                         <Receipt size={16} />
@@ -1170,7 +1167,7 @@ export default function PortalParceiro() {
 
                                                     {colunasAtivas.includes('Percentual (%)') && (
                                                         <td className="px-5 py-3 text-center text-slate-400 font-mono">
-                                                            {comissoes[row.uc] ? `${comissoes[row.uc]}%` : '-'}
+                                                            {row.percentual_comissao > 0 ? `${row.percentual_comissao}%` : '-'}
                                                         </td>
                                                     )}
 
@@ -1178,11 +1175,12 @@ export default function PortalParceiro() {
                                                         <td className="px-5 py-3 text-right font-mono text-indigo-400 font-bold">
                                                             {(() => {
                                                                 if (!isPago) return <span className="text-slate-600 font-normal">-</span>;
-                                                                let baseCalc = row.valor_real_cobranca || 0;
+                                                                let baseCalc = row.valor_real_cobranca || row.boleto_simplifica || 0;
                                                                 if (row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM') {
-                                                                    baseCalc = Math.max(0, (row.valor_real_cobranca || 0) - (row.valor_fatura_distribuidora || 0));
+                                                                    baseCalc = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
                                                                 }
-                                                                const perc = comissoes[row.uc] || 0;
+                                                                
+                                                                const perc = row.percentual_comissao || 0;
                                                                 const comissaoVal = baseCalc * (perc / 100);
                                                                 return comissaoVal > 0 ? formatMoney(comissaoVal) : <span className="text-slate-600 font-normal">-</span>;
                                                             })()}
@@ -1251,7 +1249,7 @@ export default function PortalParceiro() {
                                     </tbody>
                                 </table>
                             </div>
-                            <div className="flex justify-between items-center p-4 bg-slate-950 border-t border-slate-800 text-sm text-slate-400">
+                            <div className="flex justify-between items-center p-4 bg-slate-950 border-t border-slate-800 text-sm text-slate-400 sticky bottom-0 z-10">
                                 <div>Página <span className="font-bold text-white">{page}</span> de {totalPages || 1}</div>
                                 <div className="flex gap-2">
                                     <button onClick={() => setPage(page - 1)} disabled={page <= 1} className="p-1.5 bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-50"><ChevronLeft size={16}/></button>
@@ -1502,28 +1500,27 @@ export default function PortalParceiro() {
                                 <p className="text-sm text-center">Selecione o parceiro e o mês acima, ou verifique se existem faturas pagas neste mês.</p>
                             </div>
                         ) : (
-                            <div className="bg-white text-slate-800 p-8 rounded-2xl shadow-xl print:shadow-none print:p-0 w-full max-w-[1100px] mx-auto print:max-w-full page-break-inside-avoid">
+                            <div className="bg-white text-slate-800 p-8 rounded-2xl shadow-xl print:shadow-none print:p-0 w-full max-w-[1100px] mx-auto print:max-w-full page-break-inside-avoid relative overflow-hidden">
                                 
-                                <div className="flex justify-between items-center mb-6">
-                                    <img src="https://www.ludfor.com.br/arquivos/2010a4818c8689275e42d724e5084d4a43400d86.jpg" alt="Simplifica" className="h-16 object-contain" />
+                                <div className="flex justify-between items-center mb-6 px-2 relative z-10">
+                                    <img src="https://www.ludfor.com.br/arquivos/2010a4818c8689275e42d724e5084d4a43400d86.jpg" alt="Simplifica" className="h-20 object-contain" />
                                     <div className="text-right text-[11px] leading-tight text-slate-600">
-                                        <p className="font-bold text-[#84cc16] text-[13px] mb-1 tracking-wide">CANAL DE PARCEIROS SIMPLIFICA ENERGIA</p>
-                                        <p>(21) 9 7881-2904</p>
-                                        <p>simplificaenergia.com.br</p>
-                                    </div>
+    <p className="font-bold text-[#84cc16] text-[13px] mb-1 tracking-wide">Energia renovável acessível</p>
+    <p>simplificaenergia.com.br</p>
+</div>
                                 </div>
 
-                                <div className="bg-[#a3e635] print:bg-[#a3e635] text-white text-center font-bold py-2 text-xl uppercase tracking-widest mb-6 rounded-sm shadow-sm print:shadow-none">
+                                <div className="bg-[#a3e635] print:bg-[#a3e635] text-white text-center font-bold py-2.5 text-xl uppercase tracking-widest mb-6 rounded-sm shadow-sm print:shadow-none relative z-10">
                                     Relatório de Comissão
                                 </div>
 
-                                <div className="flex justify-between items-center text-center border-y-2 border-[#a3e635] py-4 mb-8">
+                                <div className="flex justify-between items-center text-center border-y-2 border-[#a3e635] py-4 mb-8 px-2 relative z-10">
                                     <div className="flex-1 px-2 border-r border-slate-300">
                                         <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider">Parceiro</p>
                                         <p className="text-sm font-bold text-slate-700 uppercase">{relatorioComissaoData.parceiro}</p>
                                     </div>
                                     <div className="flex-1 px-2 border-r border-slate-300">
-                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider">Consumo Total - kWh</p>
+                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider whitespace-nowrap">Consumo Total - kWh</p>
                                         <p className="text-sm font-bold text-slate-700">{Math.round(relatorioComissaoData.consumoTotal).toLocaleString('pt-BR')}</p>
                                     </div>
                                     <div className="flex-1 px-2 border-r border-slate-300">
@@ -1540,10 +1537,10 @@ export default function PortalParceiro() {
                                     </div>
                                 </div>
 
-                                <div className="border-2 border-[#a3e635] rounded-xl p-4 overflow-x-auto">
-                                    <table className="w-full text-[11px] text-left border-collapse">
+                                <div className="border-2 border-[#a3e635] rounded-xl p-4 overflow-x-auto relative z-10">
+                                    <table className="w-full text-[11px] text-left border-collapse sticky-header">
                                         <thead>
-                                            <tr className="text-[#84cc16] border-b border-[#a3e635] text-[9px] whitespace-nowrap px-1">
+                                            <tr className="text-[#84cc16] border-b border-[#a3e635] text-[9px] whitespace-nowrap px-1 sticky top-0 bg-white z-10">
                                                 <th className="pb-3 px-1 font-bold uppercase tracking-wide whitespace-nowrap">Clientes</th>
                                                 <th className="pb-3 px-1 font-bold uppercase tracking-wide whitespace-nowrap">UC</th>
                                                 <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Consumo Médio</th>
@@ -1624,9 +1621,9 @@ export default function PortalParceiro() {
                                 {parceirosAtivos.map((p, i) => (
                                     <div key={i} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 hover:bg-slate-800/50 border-b border-slate-800/50 transition-colors">
                                         <div className="font-medium text-slate-200">{p.nome_parceiro}</div>
-                                        <div className="bg-slate-950 border border-slate-700 px-4 py-2 rounded-lg text-sm font-mono text-yellow-400 flex items-center gap-3">
-                                            Senha: {p.senha}
-                                        </div>
+                                        <div className="bg-slate-950 border border-slate-700 px-4 py-2 rounded-lg text-sm font-mono text-yellow-400 flex items-center justify-center min-w-[120px] tracking-wider font-bold">
+    {p.senha}
+</div>
                                     </div>
                                 ))}
                                 {parceirosAtivos.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum parceiro ativo.</div>}

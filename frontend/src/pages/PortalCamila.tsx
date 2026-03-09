@@ -140,9 +140,11 @@ export default function PortalCamila() {
     const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
     const [filtroCiclo, setFiltroCiclo] = useState<string[]>([]); 
     const [filtroEtapa, setFiltroEtapa] = useState<string[]>([]); 
+    const [filtroFunil, setFiltroFunil] = useState<string[]>([]); 
+    const [filtroEtapaFunil, setFiltroEtapaFunil] = useState<string[]>([]); 
     
-    const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Mês Referência', 'Ciclo', '1ª Economia', 'Economia (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Etapa', 'Motivo Cancelamento'];
-    const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Mês Referência', 'Ciclo', '1ª Economia', 'Status Pagamento', 'Eficiência (%)', 'Saldo (kWh)']);
+    const colunasOpcoes = ['Ações (Links)', 'Funil', 'Etapa de Funil', 'Concessionária', 'Mês Referência', 'Ciclo', '1ª Economia', 'Economia (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Etapa CRM', 'Motivo Cancelamento'];
+    const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Funil', 'Mês Referência', 'Ciclo', '1ª Economia', 'Status Pagamento', 'Eficiência (%)', 'Saldo (kWh)']);
 
     const [page, setPage] = useState(1);
     const ITEMS_PER_PAGE = 25;
@@ -233,6 +235,8 @@ export default function PortalCamila() {
                 ...d,
                 uc: d.uc,
                 nome_cliente: d.nome || d.nome_cliente || 'Sem Nome',
+                funil: d.funil || 'Sem Funil',
+                etapa_funil: d.status_rd || d.etapa_funil || '-',
                 concessionaria: d['concessionária'] || d.concessionaria || 'Outra',
                 mes_referencia: d['mês_referência'] || d.mes_referencia_formatado || 'N/D',
                 status: d.status || d['Status Pagamento'],
@@ -286,9 +290,15 @@ export default function PortalCamila() {
                 const statusNormalizado = getPaymentBadge(row.status).text;
                 const isValido = statusNormalizado !== '-' && row.status !== 'Em análise';
                 
-                // CORREÇÃO: Validando a etapa do CRM para o 1º Faturamento
+                // NOVO: Regra adaptada para Primeiro Faturamento (Funil + Etapas)
                 const etapaNorm = String(row.objetivo_etapa || '').toUpperCase();
-                const isEtapaValidaParaPrimeiro = etapaNorm === 'PRÉ-PROTOCOLO' || etapaNorm === 'PROTOCOLADOS' || etapaNorm === 'PROTOCOLADO';
+                const funilNorm = String(row.funil || '').toUpperCase();
+                
+                const funisDeImplantacao = ['IMPLANTAÇÃO SIMPLIFICA', 'IMPLANTAÇÃO SIMPLIFICA COM TROCA'];
+                const etapasValidas = ['PRÉ-PROTOCOLO', 'PROTOCOLADOS', 'PROTOCOLADO', 'OPERACIONAL'];
+
+                // Para ser válido, precisa estar em uma das etapas acima E pertencer a um dos funis de implantação
+                const isEtapaValidaParaPrimeiro = etapasValidas.includes(etapaNorm) && funisDeImplantacao.includes(funilNorm);
 
                 let ciclo = "Recorrente";
 
@@ -297,7 +307,6 @@ export default function PortalCamila() {
                 } else if (!isValido) {
                     ciclo = "Em análise";
                 } else if (row.compensacao_kwh > 0 && isValido && !jaTevePrimeiroFaturamento) {
-                    // Só marca como "Primeiro Faturamento" se ainda estiver na etapa inicial do CRM
                     if (isEtapaValidaParaPrimeiro) {
                         ciclo = "Primeiro Faturamento";
                     } else {
@@ -404,10 +413,13 @@ export default function PortalCamila() {
             const matchMes = filtroMes.length === 0 || filtroMes.includes(formatMesRef(item.mes_referencia));
             const matchStatus = filtroStatus.length === 0 || filtroStatus.includes(getPaymentBadge(item.status).text);
             const matchCiclo = filtroCiclo.length === 0 || filtroCiclo.includes(item.ciclo);
+            
+            const matchFunil = filtroFunil.length === 0 || filtroFunil.includes(item.funil);
+            const matchEtapaFunil = filtroEtapaFunil.length === 0 || filtroEtapaFunil.includes(item.etapa_funil);
 
-            return matchBusca && matchEtapa && matchConc && matchMes && matchStatus && matchCiclo;
+            return matchBusca && matchEtapa && matchConc && matchMes && matchStatus && matchCiclo && matchFunil && matchEtapaFunil;
         });
-    }, [data, busca, filtroEtapa, filtroConc, filtroMes, filtroStatus, filtroCiclo]);
+    }, [data, busca, filtroEtapa, filtroConc, filtroMes, filtroStatus, filtroCiclo, filtroFunil, filtroEtapaFunil]);
 
     const metrics = useMemo(() => {
         const uniqueUcs = new Set();
@@ -433,7 +445,6 @@ export default function PortalCamila() {
             acc.boleto += (row.boleto_simplifica || 0);
             acc.economia += (row.economia_rs || 0);
 
-            // Agora o cálculo da métrica puxa direto do 'ciclo', que já fez a validação de etapa na raiz
             if (row.ciclo === 'Primeiro Faturamento') {
                 totalPrimeiros++;
             }
@@ -465,6 +476,9 @@ export default function PortalCamila() {
     const optCiclos = ['Primeiro Faturamento', 'Recorrente', 'Sem compensação', 'Em análise'];
     const optEtapas = Array.from(new Set(data.map(d => d.objetivo_etapa))).filter(Boolean).sort();
     
+    const optFunil = Array.from(new Set(data.map(d => d.funil))).filter(Boolean).sort();
+    const optEtapaFunil = Array.from(new Set(data.map(d => d.etapa_funil))).filter(Boolean).sort();
+    
     const optMes = Array.from(new Set(data.map(d => formatMesRef(d.mes_referencia))))
         .filter(m => m !== 'N/D' && m !== '-')
         .sort((a, b) => getSortableDate(b) - getSortableDate(a));
@@ -472,7 +486,7 @@ export default function PortalCamila() {
     const handleDownloadCSV = () => {
         if (filteredData.length === 0) return;
 
-        const headers = ['UC', 'Cliente', 'Concessionária', 'Mes Referencia', 'Consumo (kWh)', 'Compensacao (kWh)', 'Eficiencia (%)', 'Boleto (R$)', 'Fatura Dist (R$)', 'Economia (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Ciclo', 'Data 1a Economia', 'Etapa', 'Motivo Cancelamento'];
+        const headers = ['UC', 'Cliente', 'Funil', 'Etapa de Funil', 'Concessionária', 'Mes Referencia', 'Consumo (kWh)', 'Compensacao (kWh)', 'Eficiencia (%)', 'Boleto (R$)', 'Fatura Dist (R$)', 'Economia (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Ciclo', 'Data 1a Economia', 'Etapa CRM', 'Motivo Cancelamento'];
         
         const csvRows = filteredData.map(row => {
             const badge = getPaymentBadge(row.status);
@@ -481,6 +495,8 @@ export default function PortalCamila() {
             const rowData = [
                 row.uc, 
                 row.nome_cliente,
+                row.funil || '-',
+                row.etapa_funil || '-',
                 row.concessionaria,
                 formatMesRef(row.mes_referencia),
                 row.consumo_kwh, 
@@ -521,7 +537,6 @@ export default function PortalCamila() {
         }
     };
 
-    // CORREÇÃO: O botão não força mais os status 'Pré-protocolo' nos dropdowns, mantendo apenas o filtro limpo de 'Primeiro Faturamento'
     const toggleAtalhoNovosFaturamentos = () => {
         const isActive = filtroCiclo.includes('Primeiro Faturamento');
         if (isActive) {
@@ -892,6 +907,11 @@ export default function PortalCamila() {
                             </div>
 
                             <div className="w-full sm:w-auto">
+                                <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block">Funil</label>
+                                <MultiSelect options={optFunil} selected={filtroFunil} onChange={(v:any) => {setFiltroFunil(v); setPage(1);}} placeholder="Todos" searchable={true} />
+                            </div>
+
+                            <div className="w-full sm:w-auto">
                                 <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block">Concessionária</label>
                                 <MultiSelect options={optConc} selected={filtroConc} onChange={(v:any) => {setFiltroConc(v); setPage(1);}} placeholder="Todas" />
                             </div>
@@ -907,6 +927,12 @@ export default function PortalCamila() {
                                 <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block">Status Pagamento</label>
                                 <MultiSelect options={optStatus} selected={filtroStatus} onChange={(v:any) => {setFiltroStatus(v); setPage(1);}} placeholder="Todos" />
                             </div>
+                            
+                            <div className="w-full sm:w-auto hidden xl:block">
+                                <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block">Etapa de Funil</label>
+                                <MultiSelect options={optEtapaFunil} selected={filtroEtapaFunil} onChange={(v:any) => {setFiltroEtapaFunil(v); setPage(1);}} placeholder="Todas" searchable={true} />
+                            </div>
+
                             <div className="w-full sm:w-auto hidden xl:block">
                                 <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block">Etapa CRM</label>
                                 <MultiSelect options={optEtapas} selected={filtroEtapa} onChange={(v:any) => {setFiltroEtapa(v); setPage(1);}} placeholder="Todas" />
@@ -932,6 +958,9 @@ export default function PortalCamila() {
                                             <th className="px-5 py-4 min-w-[280px]">UC / Cliente</th>
                                             {colunasAtivas.includes('Ações (Links)') && <th className="px-5 py-4 text-center">Ações (Links)</th>}
                                             
+                                            {colunasAtivas.includes('Funil') && <th className="px-5 py-4 text-center">Funil</th>}
+                                            {colunasAtivas.includes('Etapa de Funil') && <th className="px-5 py-4 text-center">Etapa de Funil</th>}
+
                                             {colunasAtivas.includes('Ciclo') && <th className="px-5 py-4 text-center text-purple-300">Ciclo Atual</th>}
                                             {colunasAtivas.includes('1ª Economia') && <th className="px-5 py-4 text-center text-slate-300">Data 1ª Economia</th>}
 
@@ -948,7 +977,7 @@ export default function PortalCamila() {
                                             {colunasAtivas.includes('Status Pagamento') && <th className="px-5 py-4 text-center">Status</th>}
                                             {colunasAtivas.includes('Concessionária') && <th className="px-5 py-4">Concessionária</th>}
                                             {colunasAtivas.includes('Mês Referência') && <th className="px-5 py-4 text-center">Mês Ref.</th>}
-                                            {colunasAtivas.includes('Etapa') && <th className="px-5 py-4 text-xs text-slate-300">Etapa</th>}
+                                            {colunasAtivas.includes('Etapa CRM') && <th className="px-5 py-4 text-xs text-slate-300">Etapa CRM</th>}
                                             {colunasAtivas.includes('Motivo Cancelamento') && <th className="px-5 py-4 text-xs text-rose-300">Motivo Cancelamento</th>}
                                         </tr>
                                     </thead>
@@ -1035,6 +1064,9 @@ export default function PortalCamila() {
                                                         </td>
                                                     )}
 
+                                                    {colunasAtivas.includes('Funil') && <td className="px-5 py-3 text-center text-xs text-slate-300 truncate max-w-[150px]" title={row.funil}>{row.funil || '-'}</td>}
+                                                    {colunasAtivas.includes('Etapa de Funil') && <td className="px-5 py-3 text-center text-xs text-slate-300 truncate max-w-[150px]" title={row.etapa_funil}>{row.etapa_funil || '-'}</td>}
+
                                                     {colunasAtivas.includes('Ciclo') && (
                                                         <td className="px-5 py-3 text-center">
                                                             {row.ciclo === 'Primeiro Faturamento' ? (
@@ -1078,7 +1110,7 @@ export default function PortalCamila() {
                                                     )}
                                                     {colunasAtivas.includes('Concessionária') && <td className="px-5 py-3 text-xs text-slate-400">{row.concessionaria || '-'}</td>}
                                                     {colunasAtivas.includes('Mês Referência') && <td className="px-5 py-3 text-center font-mono text-xs text-slate-400">{formatMesRef(row.mes_referencia)}</td>}
-                                                    {colunasAtivas.includes('Etapa') && <td className="px-5 py-3 text-xs text-slate-300">{row.objetivo_etapa || '-'}</td>}
+                                                    {colunasAtivas.includes('Etapa CRM') && <td className="px-5 py-3 text-xs text-slate-300">{row.objetivo_etapa || '-'}</td>}
                                                     {colunasAtivas.includes('Motivo Cancelamento') && <td className="px-5 py-3 text-xs text-rose-300/70 truncate max-w-[150px]" title={row.motivo_cancelamento}>{row.motivo_cancelamento || '-'}</td>}
                                                 </tr>
                                             )
