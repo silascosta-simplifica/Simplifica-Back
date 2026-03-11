@@ -1318,3 +1318,4 @@ export default function PortalParceiro() {
         </div>
     );
 }
+// Teste de alteração
