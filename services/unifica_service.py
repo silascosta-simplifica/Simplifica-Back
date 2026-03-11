@@ -43,7 +43,8 @@ def verificar_e_criar_colunas():
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS data_emissao_concessionaria date;",
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS vencimento_concessionaria date;",
         "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS data_emissao date;",
-        "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS kwh_balance_credits numeric DEFAULT 0;"
+        "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS kwh_balance_credits numeric DEFAULT 0;",
+        "ALTER TABLE raw_unifica ADD COLUMN IF NOT EXISTS uc_aneel text;" ### NOVO: Criando a coluna uc_aneel
     ]
     
     with engine.begin() as conn:
@@ -87,6 +88,7 @@ def limpar_uc(valor):
 def processar_item_unifica(item):
     return {
         "uc": limpar_uc(item.get("uc")),
+        "uc_aneel": limpar_uc(item.get("uc_aneel")), ### NOVO: Capturando o uc_aneel (usando limpar_uc por segurança)
         "mes_referencia": tratar_data(item.get("date_ref")),
         "nome_cliente": item.get("client_name"),
         "valor_fatura": limpar_numero(item.get("dealership_bill_cost")), 
@@ -124,18 +126,19 @@ def salvar_em_lotes(lista_itens, pagina_atual):
         for item in dados_prontos:
             stmt = text("""
                 INSERT INTO raw_unifica (
-                    uc, mes_referencia, nome_cliente, valor_fatura, remuneracao_geracao, 
+                    uc, uc_aneel, mes_referencia, nome_cliente, valor_fatura, remuneracao_geracao, 
                     consumo_kwh, energia_compensada, economia_total, status_pagamento, 
                     vencimento, codigo_barras, codigo_pix, data_emissao_concessionaria, 
                     vencimento_concessionaria, data_emissao, link_fatura, kwh_balance_credits, updated_at
                 )
                 VALUES (
-                    :uc, :mes, :nome, :val, :remun, 
+                    :uc, :uc_aneel, :mes, :nome, :val, :remun, 
                     :cons, :comp, :eco, :st, 
                     :venc, :bar, :pix, :emi_conc, 
                     :venc_conc, :emi, :link, :saldo, :upd
                 )
                 ON CONFLICT (uc, mes_referencia) DO UPDATE SET
+                    uc_aneel = EXCLUDED.uc_aneel,
                     nome_cliente = EXCLUDED.nome_cliente,
                     valor_fatura = EXCLUDED.valor_fatura,
                     remuneracao_geracao = EXCLUDED.remuneracao_geracao,
@@ -153,8 +156,9 @@ def salvar_em_lotes(lista_itens, pagina_atual):
                     kwh_balance_credits = EXCLUDED.kwh_balance_credits,
                     updated_at = EXCLUDED.updated_at;
             """)
+            ### NOVO: Adicionado :uc_aneel abaixo
             conn.execute(stmt, {
-                "uc": item["uc"], "mes": item["mes_referencia"], "nome": item["nome_cliente"],
+                "uc": item["uc"], "uc_aneel": item["uc_aneel"], "mes": item["mes_referencia"], "nome": item["nome_cliente"],
                 "val": item["valor_fatura"], "remun": item["remuneracao_geracao"],
                 "cons": item["consumo_kwh"], "comp": item["energia_compensada"], "eco": item["economia_total"],
                 "st": item["status_pagamento"], "venc": item["vencimento"], 

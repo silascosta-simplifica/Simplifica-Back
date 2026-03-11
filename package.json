@@ -9,5 +9,24 @@
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21"
-  }
+  },
+  "name": "simplifica-back",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Simplifica-Energia/simplifica-dados.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Simplifica-Energia/simplifica-dados/issues"
+  },
+  "homepage": "https://github.com/Simplifica-Energia/simplifica-dados#readme"
 }

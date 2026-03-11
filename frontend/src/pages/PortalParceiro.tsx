@@ -86,10 +86,7 @@ const SingleSearchSelect = ({ options, selected, onChange, placeholder, icon: Ic
 
     useEffect(() => {
         const handleClickOutside = (e: any) => { 
-            if (containerRef.current && !containerRef.current.contains(e.target)) {
-                setIsOpen(false);
-                setTermoBusca(''); 
-            }
+            if (containerRef.current && !containerRef.current.contains(e.target)) { setIsOpen(false); setTermoBusca(''); }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -118,16 +115,11 @@ const SingleSearchSelect = ({ options, selected, onChange, placeholder, icon: Ic
                     <div className="p-2 border-b border-slate-700 bg-slate-900 sticky top-0 z-10">
                         <div className="relative">
                             <Search className="absolute left-2.5 top-2 text-slate-500" size={14} />
-                            <input 
-                                type="text" 
-                                value={termoBusca}
-                                onChange={(e) => setTermoBusca(e.target.value)}
-                                placeholder="Buscar..." 
-                                className="w-full bg-slate-950 border border-slate-700 rounded-md pl-8 pr-2 py-1.5 text-xs text-white outline-none focus:border-yellow-500"
-                            />
+                            <input type="text" value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} placeholder="Buscar..." className="w-full bg-slate-950 border border-slate-700 rounded-md pl-8 pr-2 py-1.5 text-xs text-white outline-none focus:border-yellow-500"/>
                         </div>
                     </div>
                     <div className="overflow-y-auto flex-1 p-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-800 rounded cursor-pointer font-medium border-b border-slate-800" onClick={() => selectOption('')}>Limpar Seleção</div>
                         {opcoesFiltradas.length > 0 ? opcoesFiltradas.map((opt: string) => (
                             <div key={opt} onClick={() => selectOption(opt)} className={`flex items-center gap-2 px-2 py-2 hover:bg-slate-800 rounded cursor-pointer group ${selected === opt ? 'bg-slate-800/50' : ''}`}>
                                 <span className={`text-sm break-words ${selected === opt ? 'text-white font-medium' : 'text-slate-400'}`}>{opt}</span>
@@ -157,12 +149,21 @@ export default function PortalParceiro() {
     const [filtroMes, setFiltroMes] = useState<string[]>([]);
     const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
     const [filtroParceiro, setFiltroParceiro] = useState<string[]>([]); 
+    const [filtroIndicador, setFiltroIndicador] = useState<string[]>([]); 
     
     const [comissaoMes, setComissaoMes] = useState<string>('');
     const [comissaoParceiro, setComissaoParceiro] = useState<string>(isAdmin ? '' : parceiroLogado);
+    const [comissaoIndicador, setComissaoIndicador] = useState<string>(''); // Novo filtro para a aba de relatório
 
-    const colunasOpcoes = ['Ações (Links)', 'Concessionária', 'Data Ganho', 'Data Protocolo', 'Data Cancelamento', 'Mês Referência', 'Etapa', 'Economia (R$)', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Percentual (%)', 'Comissão (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Data Emissão', 'Vencimento', 'Código PIX', 'Código de Barras'];
-    const [colunasAtivas, setColunasAtivas] = useState<string[]>(['Ações (Links)', 'Mês Referência', 'Etapa', 'Status Pagamento', 'Eficiência (%)', 'Comissão (R$)', 'Código PIX']);
+    const colunasOpcoes = isAdmin 
+    ? ['Ações (Links)', 'Concessionária', 'Data Ganho', 'Data Protocolo', 'Data Cancelamento', 'Mês Referência', 'Etapa', 'Economia (R$)', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Percentual Parceiro (%)', 'Comissão Parceiro (R$)', 'Nome Indicador', 'Percentual Indicador (%)', 'Comissão Indicador (R$)', 'Percentual Total (%)', 'Saldo (kWh)', 'Status Pagamento', 'Data Emissão', 'Vencimento', 'Código PIX', 'Código de Barras']
+    : ['Ações (Links)', 'Concessionária', 'Data Ganho', 'Data Protocolo', 'Data Cancelamento', 'Mês Referência', 'Etapa', 'Economia (R$)', 'Fatura Dist. (R$)', 'Eficiência (%)', 'Percentual Parceiro (%)', 'Comissão Parceiro (R$)', 'Nome Indicador', 'Percentual Indicador (%)', 'Comissão Indicador (R$)', 'Saldo (kWh)', 'Status Pagamento', 'Data Emissão', 'Vencimento', 'Código PIX', 'Código de Barras'];
+
+    const [colunasAtivas, setColunasAtivas] = useState<string[]>(
+        isAdmin 
+        ? ['Ações (Links)', 'Mês Referência', 'Etapa', 'Status Pagamento', 'Eficiência (%)', 'Comissão Parceiro (R$)', 'Nome Indicador', 'Comissão Indicador (R$)', 'Código PIX']
+        : ['Ações (Links)', 'Mês Referência', 'Etapa', 'Status Pagamento', 'Eficiência (%)', 'Comissão Parceiro (R$)', 'Nome Indicador', 'Comissão Indicador (R$)', 'Código PIX']
+    );
 
     const [page, setPage] = useState(1);
     const ITEMS_PER_PAGE = 25;
@@ -178,14 +179,11 @@ export default function PortalParceiro() {
     const [buscaRelatorio, setBuscaRelatorio] = useState('');
     const [showUcDropdown, setShowUcDropdown] = useState(false);
     const dropdownRelatorioRef = useRef<HTMLDivElement>(null);
-
     const [loadingDownloads, setLoadingDownloads] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         const handleClickOutsideDropdown = (e: any) => { 
-            if (dropdownRelatorioRef.current && !dropdownRelatorioRef.current.contains(e.target)) {
-                setShowUcDropdown(false);
-            }
+            if (dropdownRelatorioRef.current && !dropdownRelatorioRef.current.contains(e.target)) setShowUcDropdown(false);
         };
         document.addEventListener('mousedown', handleClickOutsideDropdown);
         return () => document.removeEventListener('mousedown', handleClickOutsideDropdown);
@@ -215,100 +213,58 @@ export default function PortalParceiro() {
         navigate('/login-parceiro');
     };
 
-    const setBtnLoading = (id: string, isLoading: boolean) => {
-        setLoadingDownloads(prev => ({ ...prev, [id]: isLoading }));
-    };
+    const setBtnLoading = (id: string, isLoading: boolean) => setLoadingDownloads(prev => ({ ...prev, [id]: isLoading }));
 
     const handleDownloadGestao = async (uc: string, mesRef: string, type: 'FATURA'|'BOLETO', buttonId: string) => {
         if (!uc || !mesRef) return;
         setBtnLoading(buttonId, true);
-        
         try {
             const strMesRef = String(mesRef);
             const parts = strMesRef.split('/');
             let refYm = strMesRef;
-            if (parts.length === 2) {
-                refYm = `${parts[1]}-${parts[0]}`;
-            }
-
-            const { data, error } = await supabase.functions.invoke('gestao-docs', {
-                body: { uc: uc, mes_ref: refYm, tipo: type }
-            });
-
+            if (parts.length === 2) refYm = `${parts[1]}-${parts[0]}`;
+            const { data, error } = await supabase.functions.invoke('gestao-docs', { body: { uc: uc, mes_ref: refYm, tipo: type }});
             if (error) throw error;
             if (data?.error) throw new Error(data.error);
             if (!data?.url) throw new Error("A plataforma não devolveu a URL.");
-
             window.open(data.url, '_blank');
-            
-        } catch (err: any) {
-            alert(`Falha ao buscar ${type}. Detalhe: ${err.message}`);
-        } finally {
-            setBtnLoading(buttonId, false);
-        }
+        } catch (err: any) { alert(`Falha ao buscar ${type}. Detalhe: ${err.message}`); } finally { setBtnLoading(buttonId, false); }
     };
 
-    // NOVA FUNÇÃO: Faz o download via API da Lumi em Base64 e converte em arquivo local
     const handleDownloadBoletoLumi = async (uc: string, mesRef: string, buttonId: string) => {
         if (!uc || !mesRef) return;
         setBtnLoading(buttonId, true);
-        
         try {
-            const { data, error } = await supabase.functions.invoke('lumi-boleto', {
-                body: { uc, mes_referencia: mesRef }
-            });
-
+            const { data, error } = await supabase.functions.invoke('lumi-boleto', { body: { uc, mes_referencia: mesRef } });
             if (error) throw error;
             if (data?.error) throw new Error(data.error);
-
-            // Converte o Base64 de volta para um arquivo PDF físico
             const byteCharacters = atob(data.pdfBase64);
             const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
+            for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
             const byteArray = new Uint8Array(byteNumbers);
             const blob = new Blob([byteArray], { type: 'application/pdf' });
-
-            // Cria um link temporário e força o download local no navegador
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            
             const safeMesRef = String(mesRef).replace('/', '-');
             link.setAttribute('download', `Boleto_${uc}_${safeMesRef}.pdf`);
-            
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            
-        } catch (err: any) {
-            alert(`Falha ao buscar Boleto na Lumi. Detalhe: ${err.message}`);
-        } finally {
-            setBtnLoading(buttonId, false);
-        }
+        } catch (err: any) { alert(`Falha ao buscar Boleto na Lumi. Detalhe: ${err.message}`); } finally { setBtnLoading(buttonId, false); }
     };
 
     const handleGerarCodigos = async (asaasId: string, chaveLinha: string) => {
         if (!asaasId) return;
         setCodigosAsaas(prev => ({ ...prev, [chaveLinha]: { loading: true } }));
-        
         try {
-            const { data, error } = await supabase.functions.invoke('asaas-cobranca', {
-                body: { asaas_id: asaasId }
-            });
-            
+            const { data, error } = await supabase.functions.invoke('asaas-cobranca', { body: { asaas_id: asaasId } });
             if (error) throw error;
             if (data?.error) throw new Error(data.error);
-
             const pixResult = data.pix || (data.error_pix ? `Erro: ${data.error_pix}` : 'Pix indisponível para esta cobrança');
             const barcodeResult = data.barcode || (data.error_barcode ? `Erro: ${data.error_barcode}` : 'Código indisponível');
-
-            setCodigosAsaas(prev => ({ 
-                ...prev, 
-                [chaveLinha]: { pix: pixResult, barcode: barcodeResult, loading: false } 
-            }));
+            setCodigosAsaas(prev => ({ ...prev, [chaveLinha]: { pix: pixResult, barcode: barcodeResult, loading: false } }));
         } catch (err: any) {
             setCodigosAsaas(prev => ({ ...prev, [chaveLinha]: { loading: false, error: err.message } }));
             alert('Erro na integração Asaas: ' + err.message);
@@ -316,23 +272,14 @@ export default function PortalParceiro() {
     };
 
     const handleGerarMassa = async () => {
-        if (!isAdmin || filtroParceiro.length === 0) {
-            alert("Selecione ao menos um parceiro no filtro para gerar códigos em massa.");
-            return;
-        }
-
+        if (!isAdmin || filtroParceiro.length === 0) { alert("Selecione ao menos um parceiro no filtro para gerar códigos em massa."); return; }
         const itemsToProcess = filteredData.filter(r => {
             const isPago = getPaymentBadge(r.status).text === 'Pago';
             const canGeneratePix = r.quem_indicou === 'Alexandria - LEX'; 
-            
             return r.asaas_id && !r.codigo_pix && !codigosAsaas[r.id_chave_composta]?.pix && !isPago && canGeneratePix;
         });
 
-        if (itemsToProcess.length === 0) {
-            alert("Nenhum boleto Lumi elegível e pendente de geração para este(s) parceiro(s).");
-            return;
-        }
-
+        if (itemsToProcess.length === 0) { alert("Nenhum boleto Lumi elegível e pendente de geração para este(s) parceiro(s)."); return; }
         if (!confirm(`Deseja gerar os códigos de ${itemsToProcess.length} faturas pendentes agora?`)) return;
 
         setIsBulkLoading(true);
@@ -341,30 +288,21 @@ export default function PortalParceiro() {
         for (let i = 0; i < itemsToProcess.length; i++) {
             const row = itemsToProcess[i];
             const chave = row.id_chave_composta || `${row.uc}-${row.mes_referencia}`;
-            
             setCodigosAsaas(prev => ({ ...prev, [chave]: { loading: true } }));
 
             try {
-                const { data, error } = await supabase.functions.invoke('asaas-cobranca', {
-                    body: { asaas_id: row.asaas_id }
-                });
-                
+                const { data, error } = await supabase.functions.invoke('asaas-cobranca', { body: { asaas_id: row.asaas_id } });
                 if (!error && !data?.error) {
                     const pixResult = data.pix || (data.error_pix ? `Erro Asaas: ${data.error_pix}` : 'Pix indisponível');
                     const barcodeResult = data.barcode || (data.error_barcode ? `Erro Asaas: ${data.error_barcode}` : 'Código indisponível');
-                    
                     setCodigosAsaas(prev => ({ ...prev, [chave]: { pix: pixResult, barcode: barcodeResult, loading: false } }));
                 } else {
                     setCodigosAsaas(prev => ({ ...prev, [chave]: { loading: false, error: data?.error || 'Erro' } }));
                 }
-            } catch (err: any) {
-                setCodigosAsaas(prev => ({ ...prev, [chave]: { loading: false, error: 'Falha na rede' } }));
-            }
-
+            } catch (err: any) { setCodigosAsaas(prev => ({ ...prev, [chave]: { loading: false, error: 'Falha na rede' } })); }
             setBulkProgress({ current: i + 1, total: itemsToProcess.length });
             await new Promise(resolve => setTimeout(resolve, 300));
         }
-
         setIsBulkLoading(false);
     };
 
@@ -402,92 +340,64 @@ export default function PortalParceiro() {
 
     const data = useMemo(() => {
         if (!rawData) return [];
-        const parseNum = (val: any) => {
-            if (val === null || val === undefined || val === '') return 0;
-            const strVal = String(val).replace(',', '.');
-            return isNaN(Number(strVal)) ? 0 : Number(strVal);
-        };
         const hoje = new Date();
         const anoAtual = hoje.getFullYear();
         const mesAtual = hoje.getMonth() + 1; 
 
-        let dadosTratados = rawData.map((d: any) => ({
-            ...d,
-            uc: d.uc,
-            nome_cliente: d.nome || d.nome_cliente || 'Sem Nome',
-            concessionaria: d['concessionária'] || d.concessionaria || d.concessionaria_rd || 'Outra',
-            mes_referencia: d['mês_referência'] || d.mes_referencia_formatado || 'N/D',
-            objetivo_etapa: d.objetivo_etapa || 'Sem Etapa',
-            status: d.status || d['Status Pagamento'],
-            quem_indicou: d.quem_indicou || 'Sem Parceiro',
-            valor_real_cobranca: parseNum(d.total_cobranca) || parseNum(d.valor_real_cobranca),
-            valor_fatura_distribuidora: parseNum(d.valor_fatura_distribuidora),
-            is_consorcio: d.is_consorcio || 'Não',
-            fonte_dados: d.fonte_dados, 
-            boleto_simplifica: parseNum(d.boleto_simplifica) || parseNum(d.valor_real_cobranca),
-            consumo_kwh: parseNum(d.consumo_kwh), 
-            consumo_crm_kwh: (parseNum(d.consumo_crm_mwh) || parseNum(d['consumo_médio_na_venda_mwh'])) * 1000,
-            compensacao_kwh: parseNum(d.compensacao_kwh) || parseNum(d['compensação_total_kwh']),
-            eficiencia_compensacao: parseNum(d.eficiencia_compensacao),
-            economia_rs: parseNum(d.economia_rs),
-            saldo: parseNum(d.saldo),
-            data_ganho: d.data_ganho,
-            data_protocolo: d.data_protocolo || d['data_do_1º_protocolo'],
-            data_cancelamento: d.data_cancelamento || d['data_de_pedido_de_cancelamento'],
-            data_emissao: d.data_emissao || d.emissão_do_boleto,
-            vencimento: d.vencimento || d.vencimento_do_boleto,
-            codigo_pix: d.codigo_pix,        
-            codigo_barras: d.codigo_barras,
-            asaas_id: d.asaas_id,
-            id_chave_composta: d.id_chave_composta || `${d.uc}-${d['mês_referência']}`,
-            link_boleto: d.link_boleto || d.link_fatura || d.l_link || d.u_link || null,
-            percentual_comissao: parseNum(d.percentual_comissao)
-        }));
-
-        dadosTratados = dadosTratados.filter((d: any) => {
+        let dadosTratados = rawData.filter((d: any) => {
             if (d.fonte_dados === 'RD') return false; 
-
             if (!d.mes_referencia || d.mes_referencia === 'N/D' || d.mes_referencia === '-') return true; 
             const strMes = String(d.mes_referencia);
             if (strMes.includes('-')) {
                 const parts = strMes.split('-');
                 if (parts.length >= 2) {
-                    const anoRef = Number(parts[0]);
-                    const mesRef = Number(parts[1]);
-                    if (anoRef > anoAtual) return false; 
-                    if (anoRef === anoAtual && mesRef > mesAtual) return false; 
+                    if (Number(parts[0]) > anoAtual) return false; 
+                    if (Number(parts[0]) === anoAtual && Number(parts[1]) > mesAtual) return false; 
                 }
-            } 
-            else if (strMes.includes('/')) {
+            } else if (strMes.includes('/')) {
                 const parts = strMes.split('/');
                 if (parts.length === 2) {
-                    const mesRef = Number(parts[0]);
-                    const anoRef = Number(parts[1]);
-                    if (anoRef > anoAtual) return false;
-                    if (anoRef === anoAtual && mesRef > mesAtual) return false;
+                    if (Number(parts[1]) > anoAtual) return false;
+                    if (Number(parts[1]) === anoAtual && Number(parts[0]) > mesAtual) return false;
                 }
             }
             return true;
         });
 
         let finalData = isAdmin ? dadosTratados : dadosTratados.filter((d: any) => d.quem_indicou === parceiroLogado);
-        
         return [...finalData].sort((a: any, b: any) => getSortableDate(b.mes_referencia) - getSortableDate(a.mes_referencia));
     }, [rawData, isAdmin, parceiroLogado]);
 
     const ucsUnicas = useMemo(() => {
         const map = new Map();
-        data.forEach(d => {
-            if(!map.has(d.uc)) map.set(d.uc, `${d.uc} - ${d.nome_cliente}`);
-        });
+        data.forEach(d => { if(!map.has(d.uc)) map.set(d.uc, `${d.uc} - ${d.nome_cliente}`); });
         return Array.from(map.entries()).map(([uc, label]) => ({ uc, label })).sort((a,b) => a.label.localeCompare(b.label));
     }, [data]);
 
+    // OPÇÕES DE FILTROS GERAIS
     const optEtapas = Array.from(new Set(data.map(d => d.objetivo_etapa))).sort();
     const optConc = Array.from(new Set(data.map(d => d.concessionaria))).sort();
     const optParceiros = Array.from(new Set(data.map(d => d.quem_indicou))).filter(Boolean).sort();
     const optStatus = ['Pago', 'Atrasado', 'Aberto', '-'];
     
+    // OPÇÕES DE INDICADOR EM CASCATA PARA A TELA DE CARTEIRA
+    const optIndicadores = useMemo(() => {
+        let baseData = data;
+        if (filtroParceiro.length > 0) {
+            baseData = baseData.filter(d => filtroParceiro.includes(d.quem_indicou));
+        }
+        return Array.from(new Set(baseData.map(d => d.nome_indicador))).filter(i => i && i !== '-').sort();
+    }, [data, filtroParceiro]);
+
+    // OPÇÕES DE INDICADOR EM CASCATA PARA O RELATÓRIO DE COMISSÃO
+    const optIndicadoresComissao = useMemo(() => {
+        let baseData = data;
+        if (comissaoParceiro) {
+            baseData = baseData.filter(d => d.quem_indicou === comissaoParceiro);
+        }
+        return Array.from(new Set(baseData.map(d => d.nome_indicador))).filter(i => i && i !== '-').sort();
+    }, [data, comissaoParceiro]);
+
     const optMes = Array.from(new Set(data.map(d => formatMesRef(d.mes_referencia))))
         .filter(m => m !== '-')
         .sort((a: any, b: any) => {
@@ -495,11 +405,7 @@ export default function PortalParceiro() {
             return new Date(yB, mB - 1).getTime() - new Date(yA, mA - 1).getTime();
         });
 
-    useEffect(() => {
-        if (optMes.length > 0 && !comissaoMes) {
-            setComissaoMes(optMes[0]);
-        }
-    }, [optMes, comissaoMes]);
+    useEffect(() => { if (optMes.length > 0 && !comissaoMes) setComissaoMes(optMes[0]); }, [optMes, comissaoMes]);
 
     const filteredData = useMemo(() => {
         return data.filter(item => {
@@ -510,10 +416,11 @@ export default function PortalParceiro() {
             const matchMes = filtroMes.length === 0 || filtroMes.includes(formatMesRef(item.mes_referencia));
             const matchStatus = filtroStatus.length === 0 || filtroStatus.includes(getPaymentBadge(item.status).text);
             const matchParceiro = filtroParceiro.length === 0 || filtroParceiro.includes(item.quem_indicou);
+            const matchIndicador = filtroIndicador.length === 0 || filtroIndicador.includes(item.nome_indicador);
 
-            return matchBusca && matchEtapa && matchConc && matchMes && matchStatus && matchParceiro;
+            return matchBusca && matchEtapa && matchConc && matchMes && matchStatus && matchParceiro && matchIndicador;
         });
-    }, [data, busca, filtroEtapa, filtroConc, filtroMes, filtroStatus, filtroParceiro]);
+    }, [data, busca, filtroEtapa, filtroConc, filtroMes, filtroStatus, filtroParceiro, filtroIndicador]);
 
     const metrics = useMemo(() => {
         const uniqueUcs = new Set();
@@ -535,14 +442,14 @@ export default function PortalParceiro() {
                     baseCalculoComissao = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
                 }
                 
-                const perc = row.percentual_comissao || 0;
-                acc.comissao += (baseCalculoComissao * (perc / 100));
+                acc.comissaoParceiro += (baseCalculoComissao * ((row.perc_parceiro_rec || 0) / 100));
+                acc.comissaoIndicador += (baseCalculoComissao * ((row.perc_indicador_rec || 0) / 100));
             }
 
             return acc;
-        }, { consumo: 0, compensacao: 0, boleto: 0, economia: 0, comissao: 0, saldoAtual: 0 });
+        }, { consumo: 0, compensacao: 0, boleto: 0, economia: 0, comissaoParceiro: 0, comissaoIndicador: 0, saldoAtual: 0 });
 
-        return { ...totals, totalUcs: uniqueUcs.size };
+        return { ...totals, totalUcs: uniqueUcs.size, comissaoTotalGeral: totals.comissaoParceiro + totals.comissaoIndicador };
     }, [filteredData]);
 
     const paginatedData = filteredData.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -557,8 +464,14 @@ export default function PortalParceiro() {
         
         if (colunasAtivas.includes('Fatura Dist. (R$)')) headers.push('Fatura Dist. (R$)');
         if (colunasAtivas.includes('Eficiência (%)')) headers.push('Eficiência (%)');
-        if (colunasAtivas.includes('Percentual (%)')) headers.push('Percentual (%)');
-        if (colunasAtivas.includes('Comissão (R$)')) headers.push('Comissao (R$)');
+        
+        if (colunasAtivas.includes('Percentual Parceiro (%)')) headers.push('Percentual Parceiro (%)');
+        if (colunasAtivas.includes('Comissão Parceiro (R$)')) headers.push('Comissao Parceiro (R$)');
+        if (colunasAtivas.includes('Nome Indicador')) headers.push('Nome Indicador');
+        if (colunasAtivas.includes('Percentual Indicador (%)')) headers.push('Percentual Indicador (%)');
+        if (colunasAtivas.includes('Comissão Indicador (R$)')) headers.push('Comissao Indicador (R$)');
+        if (colunasAtivas.includes('Percentual Total (%)')) headers.push('Percentual Total (%)');
+
         if (colunasAtivas.includes('Saldo (kWh)')) headers.push('Saldo (kWh)');
         if (colunasAtivas.includes('Etapa')) headers.push('Etapa');
         if (colunasAtivas.includes('Status Pagamento')) headers.push('Status Pagamento');
@@ -580,27 +493,28 @@ export default function PortalParceiro() {
             const rowData = [row.uc, row.nome_cliente];
             if (isAdmin) rowData.push(row.quem_indicou || '-');
             
-            rowData.push(
-                row.consumo_kwh, 
-                row.compensacao_kwh, 
-                row.boleto_simplifica
-            );
+            rowData.push(row.consumo_kwh, row.compensacao_kwh, row.boleto_simplifica);
 
-            const perc = row.percentual_comissao || 0;
-            let comissaoTotal = 0;
-            
+            let valComissaoParc = 0; let valComissaoInd = 0;
             if (isPago) {
                 let baseCalc = row.valor_real_cobranca || row.boleto_simplifica || 0;
                 if (row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM') {
                     baseCalc = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
                 }
-                comissaoTotal = baseCalc * (perc / 100);
+                valComissaoParc = baseCalc * ((row.perc_parceiro_rec || 0) / 100);
+                valComissaoInd = baseCalc * ((row.perc_indicador_rec || 0) / 100);
             }
 
             if (colunasAtivas.includes('Fatura Dist. (R$)')) rowData.push(row.valor_fatura_distribuidora || 0);
             if (colunasAtivas.includes('Eficiência (%)')) rowData.push(row.eficiencia_compensacao > 0 ? (row.eficiencia_compensacao * 100).toFixed(1) + '%' : '-');
-            if (colunasAtivas.includes('Percentual (%)')) rowData.push(perc > 0 ? `${perc}%` : '-');
-            if (colunasAtivas.includes('Comissão (R$)')) rowData.push(isPago && comissaoTotal > 0 ? comissaoTotal : '-');
+            
+            if (colunasAtivas.includes('Percentual Parceiro (%)')) rowData.push(row.perc_parceiro_rec > 0 ? `${row.perc_parceiro_rec}%` : '-');
+            if (colunasAtivas.includes('Comissão Parceiro (R$)')) rowData.push(isPago && valComissaoParc > 0 ? valComissaoParc : '-');
+            if (colunasAtivas.includes('Nome Indicador')) rowData.push(row.nome_indicador || '-');
+            if (colunasAtivas.includes('Percentual Indicador (%)')) rowData.push(row.perc_indicador_rec > 0 ? `${row.perc_indicador_rec}%` : '-');
+            if (colunasAtivas.includes('Comissão Indicador (R$)')) rowData.push(isPago && valComissaoInd > 0 ? valComissaoInd : '-');
+            if (colunasAtivas.includes('Percentual Total (%)')) rowData.push(row.perc_total_rec > 0 ? `${row.perc_total_rec}%` : '-');
+
             if (colunasAtivas.includes('Saldo (kWh)')) rowData.push(row.saldo || 0);
             if (colunasAtivas.includes('Etapa')) rowData.push(row.objetivo_etapa || '-');
             if (colunasAtivas.includes('Status Pagamento')) rowData.push(badge.text !== '-' ? badge.text : '');
@@ -648,23 +562,11 @@ export default function PortalParceiro() {
         if (historico.length === 0) return null;
 
         const infoCadastral = historico[historico.length - 1]; 
-
-        let totalEco = 0;
-        let custoCom = 0;
-        let custoSem = 0;
-        let totalConsumo = 0;
-        let totalComp = 0;
-        let countFaturasValidas = 0;
-        
-        let sumEficiencia = 0;
-        let countEficiencia = 0;
-        let chartData: any[] = [];
+        let totalEco = 0; let custoCom = 0; let custoSem = 0; let totalConsumo = 0; let totalComp = 0; let countFaturasValidas = 0;
+        let sumEficiencia = 0; let countEficiencia = 0; let chartData: any[] = [];
 
         historico.forEach(row => {
-            totalEco += (row.economia_rs || 0);
-            totalComp += (row.compensacao_kwh || 0);
-            totalConsumo += (row.consumo_kwh || 0);
-
+            totalEco += (row.economia_rs || 0); totalComp += (row.compensacao_kwh || 0); totalConsumo += (row.consumo_kwh || 0);
             let isEqGoConsorcio = row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM';
             let pagoSimplifica = row.boleto_simplifica || 0;
             let faturaDist = row.valor_fatura_distribuidora || 0;
@@ -673,45 +575,22 @@ export default function PortalParceiro() {
             let pagoTotalCliente = isEqGoConsorcio ? pagoSimplifica : (pagoSimplifica + faturaDist);
             let valorSemSimplifica = pagoTotalCliente + economia;
 
-            custoCom += pagoTotalCliente;
-            custoSem += valorSemSimplifica;
-            
+            custoCom += pagoTotalCliente; custoSem += valorSemSimplifica;
             if (valorSemSimplifica > 0) countFaturasValidas++;
-
-            if (row.eficiencia_compensacao > 0) {
-                sumEficiencia += row.eficiencia_compensacao;
-                countEficiencia++;
-            }
+            if (row.eficiencia_compensacao > 0) { sumEficiencia += row.eficiencia_compensacao; countEficiencia++; }
 
             if (row.mes_referencia && row.mes_referencia !== 'N/D') {
                 chartData.push({
-                    mes: formatMesRef(row.mes_referencia),
-                    consumo: row.consumo_kwh || 0,
-                    compensacao: row.compensacao_kwh || 0,
-                    economia: row.economia_rs || 0
+                    mes: formatMesRef(row.mes_referencia), consumo: row.consumo_kwh || 0, compensacao: row.compensacao_kwh || 0, economia: row.economia_rs || 0
                 });
             }
         });
 
-        const eficienciaMedia = countEficiencia > 0 ? (sumEficiencia / countEficiencia) * 100 : 0;
-        const mediaCustoSem = countFaturasValidas > 0 ? custoSem / countFaturasValidas : 0;
-        const mesesGratis = mediaCustoSem > 0 ? (totalEco / mediaCustoSem) : 0;
-        
-        const ultimasFaturas = [...historico].reverse().slice(0, 6);
-        
-        chartData = chartData.slice(-12);
-
         return {
-            infoCadastral,
-            totalEco,
-            custoCom,
-            custoSem,
-            totalConsumo,
-            totalComp,
-            eficienciaMedia,
-            mesesGratis,
-            chartData,
-            ultimasFaturas
+            infoCadastral, totalEco, custoCom, custoSem, totalConsumo, totalComp,
+            eficienciaMedia: countEficiencia > 0 ? (sumEficiencia / countEficiencia) * 100 : 0,
+            mesesGratis: (countFaturasValidas > 0 ? custoSem / countFaturasValidas : 0) > 0 ? (totalEco / (countFaturasValidas > 0 ? custoSem / countFaturasValidas : 0)) : 0,
+            chartData: chartData.slice(-12), ultimasFaturas: [...historico].reverse().slice(0, 6)
         };
     }, [relatorioUc, data]);
 
@@ -722,15 +601,17 @@ export default function PortalParceiro() {
             const isMes = formatMesRef(row.mes_referencia) === comissaoMes;
             const isParceiro = row.quem_indicou === comissaoParceiro;
             const isPago = getPaymentBadge(row.status).text === 'Pago';
-            return isMes && isParceiro && isPago;
+            
+            // Adicionado o filtro de indicador no relatório
+            const matchIndicador = comissaoIndicador === '' || row.nome_indicador === comissaoIndicador;
+            
+            return isMes && isParceiro && isPago && matchIndicador;
         });
 
         if (filtered.length === 0) return null;
 
-        let consumoTotal = 0;
-        let compensacaoTotal = 0; 
-        let boletoTotal = 0; 
-        let comissaoTotal = 0;
+        let consumoTotal = 0; let compensacaoTotal = 0; let boletoTotal = 0; 
+        let comissaoParceiroTotal = 0; let comissaoIndicadorTotal = 0;
 
         const rows = filtered.map(row => {
             let baseCalc = row.valor_real_cobranca || row.boleto_simplifica || 0;
@@ -738,32 +619,31 @@ export default function PortalParceiro() {
                 baseCalc = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
             }
             
-            const perc = row.percentual_comissao || 0;
-            const comissaoVal = baseCalc * (perc / 100);
+            const valParceiro = baseCalc * ((row.perc_parceiro_rec || 0) / 100);
+            const valIndicador = baseCalc * ((row.perc_indicador_rec || 0) / 100);
 
-            consumoTotal += (row.consumo_kwh || 0);
-            compensacaoTotal += (row.compensacao_kwh || 0); 
-            boletoTotal += (row.boleto_simplifica || 0); 
-            comissaoTotal += comissaoVal;
+            consumoTotal += (row.consumo_kwh || 0); compensacaoTotal += (row.compensacao_kwh || 0); boletoTotal += (row.boleto_simplifica || 0); 
+            comissaoParceiroTotal += valParceiro; comissaoIndicadorTotal += valIndicador;
 
-            return {
-                ...row,
-                baseCalc,
-                perc,
-                comissaoVal
-            };
+            return { ...row, baseCalc, valParceiro, valIndicador };
         }).sort((a, b) => a.nome_cliente.localeCompare(b.nome_cliente));
 
-        return {
-            parceiro: comissaoParceiro,
-            mes: comissaoMes,
-            consumoTotal,
+        const uniqueConcessionariasReport = Array.from(new Set(rows.map(r => r.concessionaria))).join(' / ');
+
+        return { 
+            parceiro: comissaoParceiro, 
+            indicador: comissaoIndicador,
+            mes: comissaoMes, 
+            concessionarias: uniqueConcessionariasReport,
+            consumoTotal, 
             compensacaoTotal, 
             boletoTotal, 
-            comissaoTotal,
-            rows
+            comissaoParceiroTotal, 
+            comissaoIndicadorTotal, 
+            comissaoTotalGeral: comissaoParceiroTotal + comissaoIndicadorTotal, 
+            rows 
         };
-    }, [data, comissaoMes, comissaoParceiro]);
+    }, [data, comissaoMes, comissaoParceiro, comissaoIndicador]);
 
     if (analyticsLoading) {
         return (
@@ -789,73 +669,11 @@ export default function PortalParceiro() {
         <div className="min-h-screen print:min-h-0 bg-slate-950 print:bg-white text-white print:text-black font-sans flex flex-col">
             
             {activeTab === 'relatorio' && (
-                <style>
-                    {`
-                        @media print {
-                            @page { 
-                                size: A4 portrait; 
-                                margin: 10mm; 
-                            }
-                            
-                            html, body, #root {
-                                background-color: #ffffff !important; 
-                                color: white !important;
-                                -webkit-print-color-adjust: exact !important;
-                                print-color-adjust: exact !important;
-                                height: auto !important;
-                                min-height: 100% !important;
-                                display: block !important;
-                                margin: 0 !important;
-                                padding: 0 !important;
-                            }
-                            
-                            #relatorio-print-container {
-                                margin-top: 15mm !important;
-                            }
-                            
-                            .recharts-responsive-container {
-                                width: 100% !important;
-                                height: 220px !important; 
-                                margin-bottom: 80px !important; 
-                            }
-                            
-                            .print-break-avoid {
-                                page-break-inside: avoid !important;
-                                break-inside: avoid !important;
-                            }
-                        }
-                    `}
-                </style>
+                <style>{`@media print { @page { size: A4 portrait; margin: 10mm; } html, body, #root { background-color: #ffffff !important; color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; height: auto !important; min-height: 100% !important; display: block !important; margin: 0 !important; padding: 0 !important; } #relatorio-print-container { margin-top: 15mm !important; } .recharts-responsive-container { width: 100% !important; height: 220px !important; margin-bottom: 80px !important; } .print-break-avoid { page-break-inside: avoid !important; break-inside: avoid !important; } }`}</style>
             )}
 
             {activeTab === 'comissao' && (
-                <style>
-                    {`
-                        @media print {
-                            @page { 
-                                size: A4 landscape; 
-                                margin: 10mm; 
-                            }
-                            
-                            html, body, #root {
-                                background-color: #ffffff !important; 
-                                color: #000000 !important;
-                                -webkit-print-color-adjust: exact !important;
-                                print-color-adjust: exact !important;
-                                height: auto !important;
-                                min-height: 100% !important;
-                                display: block !important;
-                                margin: 0 !important;
-                                padding: 0 !important;
-                            }
-                            
-                            .print-break-avoid {
-                                page-break-inside: avoid !important;
-                                break-inside: avoid !important;
-                            }
-                        }
-                    `}
-                </style>
+                <style>{`@media print { @page { size: A4 landscape; margin: 10mm; } html, body, #root { background-color: #ffffff !important; color: #000000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; height: auto !important; min-height: 100% !important; display: block !important; margin: 0 !important; padding: 0 !important; } .print-break-avoid { page-break-inside: avoid !important; break-inside: avoid !important; } }`}</style>
             )}
 
             <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center sticky top-0 z-40 print:hidden">
@@ -872,14 +690,10 @@ export default function PortalParceiro() {
                     <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800 overflow-x-auto max-w-full">
                         <button onClick={() => setActiveTab('carteira')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'carteira' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><TableIcon size={16}/> Carteira</button>
                         <button onClick={() => setActiveTab('relatorio')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'relatorio' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><FileText size={16}/> Relatório Cliente</button>
-                        <button onClick={() => setActiveTab('comissao')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'comissao' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><Wallet size={16}/> Relatório Comissão</button>
-                        {isAdmin && (
-                            <button onClick={() => setActiveTab('gestao')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'gestao' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><KeyRound size={16}/> Senhas</button>
-                        )}
+                        {isAdmin && <button onClick={() => setActiveTab('comissao')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'comissao' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><Wallet size={16}/> Relatório Comissão</button>}
+                        {isAdmin && <button onClick={() => setActiveTab('gestao')} className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-all ${activeTab === 'gestao' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><KeyRound size={16}/> Senhas</button>}
                     </div>
-                    <button onClick={handleLogout} className="text-slate-400 hover:text-rose-400 transition-colors flex items-center gap-2 text-sm font-bold">
-                        <LogOut size={18} /> Sair
-                    </button>
+                    <button onClick={handleLogout} className="text-slate-400 hover:text-rose-400 transition-colors flex items-center gap-2 text-sm font-bold"><LogOut size={18} /> Sair</button>
                 </div>
             </header>
 
@@ -887,16 +701,14 @@ export default function PortalParceiro() {
                 
                 {activeTab === 'carteira' && (
                     <div className="print:hidden space-y-6 flex-1 flex flex-col">
-                        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 animate-in fade-in zoom-in duration-300">
+                        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-9 gap-3 animate-in fade-in zoom-in duration-300">
                             
                             <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                 <div className="flex items-center gap-1.5">
                                     <Users size={14} className="text-indigo-400 shrink-0"/>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">UCs Vinculadas</p>
                                 </div>
-                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-white truncate w-full" title={new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}>
-                                    {new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}
-                                </p>
+                                <p className="text-lg xl:text-xl font-bold font-display text-white truncate w-full" title={new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}>{new Intl.NumberFormat('pt-BR').format(metrics.totalUcs)}</p>
                             </div>
 
                             <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
@@ -904,9 +716,7 @@ export default function PortalParceiro() {
                                     <Zap size={14} className="text-blue-500 shrink-0"/>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Consumo Real</p>
                                 </div>
-                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-white truncate w-full" title={Math.round(metrics.consumo).toLocaleString('pt-BR')}>
-                                    {Math.round(metrics.consumo).toLocaleString('pt-BR')} <span className="text-sm text-slate-400 font-normal">kWh</span>
-                                </p>
+                                <p className="text-lg xl:text-xl font-bold font-display text-white truncate w-full" title={Math.round(metrics.consumo).toLocaleString('pt-BR')}>{Math.round(metrics.consumo).toLocaleString('pt-BR')} <span className="text-xs text-slate-400 font-normal">kWh</span></p>
                             </div>
 
                             <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
@@ -914,9 +724,7 @@ export default function PortalParceiro() {
                                     <Zap size={14} className="text-emerald-500 shrink-0"/>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Compensação</p>
                                 </div>
-                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-white truncate w-full" title={Math.round(metrics.compensacao).toLocaleString('pt-BR')}>
-                                    {Math.round(metrics.compensacao).toLocaleString('pt-BR')} <span className="text-sm text-slate-400 font-normal">kWh</span>
-                                </p>
+                                <p className="text-lg xl:text-xl font-bold font-display text-white truncate w-full" title={Math.round(metrics.compensacao).toLocaleString('pt-BR')}>{Math.round(metrics.compensacao).toLocaleString('pt-BR')} <span className="text-xs text-slate-400 font-normal">kWh</span></p>
                             </div>
 
                             <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
@@ -924,9 +732,7 @@ export default function PortalParceiro() {
                                     <Receipt size={14} className="text-yellow-500 shrink-0"/>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Faturamento</p>
                                 </div>
-                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-white truncate w-full" title={formatMoney(metrics.boleto)}>
-                                    {formatMoney(metrics.boleto)}
-                                </p>
+                                <p className="text-lg xl:text-xl font-bold font-display text-white truncate w-full" title={formatMoney(metrics.boleto)}>{formatMoney(metrics.boleto)}</p>
                             </div>
 
                             <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
@@ -934,9 +740,7 @@ export default function PortalParceiro() {
                                     <PiggyBank size={14} className="text-emerald-400 shrink-0"/>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Economia Cliente</p>
                                 </div>
-                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-emerald-400 truncate w-full" title={formatMoney(metrics.economia)}>
-                                    {formatMoney(metrics.economia)}
-                                </p>
+                                <p className="text-lg xl:text-xl font-bold font-display text-emerald-400 truncate w-full" title={formatMoney(metrics.economia)}>{formatMoney(metrics.economia)}</p>
                             </div>
 
                             <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
@@ -944,24 +748,36 @@ export default function PortalParceiro() {
                                     <Wallet size={14} className="text-cyan-400 shrink-0"/>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Saldo (Atual)</p>
                                 </div>
-                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-cyan-400 truncate w-full" title={Math.round(metrics.saldoAtual).toLocaleString('pt-BR')}>
-                                    {Math.round(metrics.saldoAtual).toLocaleString('pt-BR')} <span className="text-sm text-cyan-400/50 font-normal">kWh</span>
-                                </p>
+                                <p className="text-lg xl:text-xl font-bold font-display text-cyan-400 truncate w-full" title={Math.round(metrics.saldoAtual).toLocaleString('pt-BR')}>{Math.round(metrics.saldoAtual).toLocaleString('pt-BR')} <span className="text-xs text-cyan-400/50 font-normal">kWh</span></p>
+                            </div>
+
+                            <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <Wallet size={14} className="text-blue-400 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-blue-300 uppercase tracking-wider truncate">Comissão Total</p>
+                                </div>
+                                <p className="text-lg xl:text-xl font-bold font-display text-blue-400 truncate w-full" title={formatMoney(metrics.comissaoTotalGeral)}>{formatMoney(metrics.comissaoTotalGeral)}</p>
                             </div>
 
                             <div className="bg-indigo-900/20 border border-indigo-500/30 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
                                 <div className="flex items-center gap-1.5">
                                     <Wallet size={14} className="text-indigo-400 shrink-0"/>
-                                    <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider truncate">Comissão Total</p>
+                                    <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider truncate">Comis. Parceiro</p>
                                 </div>
-                                <p className="text-lg xl:text-xl 2xl:text-2xl font-bold font-display text-indigo-400 truncate w-full" title={formatMoney(metrics.comissao)}>
-                                    {formatMoney(metrics.comissao)}
-                                </p>
+                                <p className="text-lg xl:text-xl font-bold font-display text-indigo-400 truncate w-full" title={formatMoney(metrics.comissaoParceiro)}>{formatMoney(metrics.comissaoParceiro)}</p>
+                            </div>
+                            
+                            <div className="bg-fuchsia-900/20 border border-fuchsia-500/30 p-3 rounded-xl shadow-sm flex flex-col gap-1 justify-center min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <Wallet size={14} className="text-fuchsia-400 shrink-0"/>
+                                    <p className="text-[10px] font-bold text-fuchsia-300 uppercase tracking-wider truncate">Comis. Indicador</p>
+                                </div>
+                                <p className="text-lg xl:text-xl font-bold font-display text-fuchsia-400 truncate w-full" title={formatMoney(metrics.comissaoIndicador)}>{formatMoney(metrics.comissaoIndicador)}</p>
                             </div>
 
                         </div>
 
-                        <section className={`bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm grid gap-3 items-end ${isAdmin ? 'grid-cols-1 md:grid-cols-3 xl:grid-cols-7' : 'grid-cols-1 md:grid-cols-3 xl:grid-cols-6'}`}>
+                        <section className={`bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm grid gap-3 items-end ${isAdmin ? 'grid-cols-1 md:grid-cols-3 xl:grid-cols-8' : 'grid-cols-1 md:grid-cols-3 xl:grid-cols-7'}`}>
                             <div className="xl:col-span-2">
                                 <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block">Buscar UC/Cliente</label>
                                 <div className="relative group">
@@ -976,6 +792,11 @@ export default function PortalParceiro() {
                                     <MultiSelect options={optParceiros} selected={filtroParceiro} onChange={(v:any) => {setFiltroParceiro(v); setPage(1);}} placeholder="Todos" fullWidth searchable={true}/>
                                 </div>
                             )}
+
+                            <div>
+                                <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block text-fuchsia-400">Indicador</label>
+                                <MultiSelect options={optIndicadores} selected={filtroIndicador} onChange={(v:any) => {setFiltroIndicador(v); setPage(1);}} placeholder="Todos" fullWidth searchable={true}/>
+                            </div>
 
                             <div>
                                 <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider mb-1 block">Concessionária</label>
@@ -1002,17 +823,8 @@ export default function PortalParceiro() {
                                     <span className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">{filteredData.length} registros</span>
                                     
                                     {isAdmin && filtroParceiro.length > 0 && (
-                                        <button 
-                                            onClick={handleGerarMassa} 
-                                            disabled={isBulkLoading} 
-                                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
-                                            title="Gera os códigos em massa apenas para faturas da Lumi pendentes da Alexandria"
-                                        >
-                                            {isBulkLoading ? (
-                                                <><Loader2 size={16} className="animate-spin" /> {bulkProgress.current}/{bulkProgress.total}</>
-                                            ) : (
-                                                <><PlayCircle size={16} /> Gerar em Massa</>
-                                            )}
+                                        <button onClick={handleGerarMassa} disabled={isBulkLoading} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold transition-colors disabled:opacity-50" title="Gera códigos em massa">
+                                            {isBulkLoading ? <><Loader2 size={16} className="animate-spin" /> {bulkProgress.current}/{bulkProgress.total}</> : <><PlayCircle size={16} /> Gerar em Massa</>}
                                         </button>
                                     )}
 
@@ -1037,10 +849,16 @@ export default function PortalParceiro() {
                                             
                                             {colunasAtivas.includes('Fatura Dist. (R$)') && <th className="px-5 py-4 text-right text-slate-300">Fatura Dist. (R$)</th>}
                                             {colunasAtivas.includes('Eficiência (%)') && <th className="px-5 py-4 text-center">Eficiência (%)</th>}
-                                            {colunasAtivas.includes('Percentual (%)') && <th className="px-5 py-4 text-center text-slate-300">Percentual (%)</th>}
-                                            {colunasAtivas.includes('Comissão (R$)') && <th className="px-5 py-4 text-right text-indigo-400">Comissão (R$)</th>}
-                                            {colunasAtivas.includes('Saldo (kWh)') && <th className="px-5 py-4 text-right text-cyan-400">Saldo (kWh)</th>}
                                             
+                                            {colunasAtivas.includes('Percentual Parceiro (%)') && <th className="px-5 py-4 text-center text-slate-300">% Parc.</th>}
+                                            {colunasAtivas.includes('Comissão Parceiro (R$)') && <th className="px-5 py-4 text-right text-indigo-400">Comis. Parc. (R$)</th>}
+                                            
+                                            {colunasAtivas.includes('Nome Indicador') && <th className="px-5 py-4 text-left text-slate-300">Indicador</th>}
+                                            {colunasAtivas.includes('Percentual Indicador (%)') && <th className="px-5 py-4 text-center text-slate-300">% Ind.</th>}
+                                            {colunasAtivas.includes('Comissão Indicador (R$)') && <th className="px-5 py-4 text-right text-fuchsia-400">Comis. Ind. (R$)</th>}
+                                            {colunasAtivas.includes('Percentual Total (%)') && <th className="px-5 py-4 text-center text-slate-300">% Total</th>}
+
+                                            {colunasAtivas.includes('Saldo (kWh)') && <th className="px-5 py-4 text-right text-cyan-400">Saldo (kWh)</th>}
                                             {colunasAtivas.includes('Etapa') && <th className="px-5 py-4 text-left">Etapa</th>}
                                             {colunasAtivas.includes('Status Pagamento') && <th className="px-5 py-4 text-center">Status</th>}
                                             {colunasAtivas.includes('Concessionária') && <th className="px-5 py-4 text-left">Concessionária</th>}
@@ -1051,7 +869,7 @@ export default function PortalParceiro() {
                                             {colunasAtivas.includes('Data Cancelamento') && <th className="px-5 py-4 text-left text-slate-500">Dt. Cancelamento</th>}
                                             {colunasAtivas.includes('Data Emissão') && <th className="px-5 py-4 text-left text-slate-500">Dt. Emissão</th>}
                                             {colunasAtivas.includes('Vencimento') && <th className="px-5 py-4 text-left text-slate-500">Vencimento</th>}
-                                            {colunasAtivas.includes('Código PIX') && <th className="px-5 py-4 text-left text-slate-300">Código PIX (Copia/Cola)</th>}
+                                            {colunasAtivas.includes('Código PIX') && <th className="px-5 py-4 text-left text-slate-300">Código PIX</th>}
                                             {colunasAtivas.includes('Código de Barras') && <th className="px-5 py-4 text-left text-slate-300">Código de Barras</th>}
                                         </tr>
                                     </thead>
@@ -1061,16 +879,12 @@ export default function PortalParceiro() {
                                             const isPago = badge.text === 'Pago';
                                             const isAlexandria = row.quem_indicou === 'Alexandria - LEX';
                                             const chaveLinha = row.id_chave_composta || `${row.uc}-${row.mes_referencia}`;
-
                                             const eficPercent = (row.eficiencia_compensacao || 0) * 100;
-                                            let eficColor = 'text-rose-400';
-                                            let eficBg = 'bg-rose-900/40 border-rose-800/50';
+                                            let eficColor = 'text-rose-400'; let eficBg = 'bg-rose-900/40 border-rose-800/50';
                                             if (eficPercent >= 90) { eficColor = 'text-emerald-400'; eficBg = 'bg-emerald-900/40 border-emerald-800/50'; }
                                             else if (eficPercent >= 70) { eficColor = 'text-yellow-400'; eficBg = 'bg-yellow-900/40 border-yellow-800/50'; }
 
-                                            const linkBoletoLumiDireto = row.fonte_dados === 'LUMI' && row.link_boleto 
-                                                ? `https://api.labs-lumi.com.br/faturas/download/${row.link_boleto}` 
-                                                : null;
+                                            const linkBoletoLumiDireto = row.fonte_dados === 'LUMI' && row.link_boleto ? `https://api.labs-lumi.com.br/faturas/download/${row.link_boleto}` : null;
 
                                             return (
                                                 <tr key={`${chaveLinha}-${index}`} className="hover:bg-slate-800/40 transition-colors whitespace-nowrap">
@@ -1078,68 +892,33 @@ export default function PortalParceiro() {
                                                         <div className="font-mono text-slate-200 font-bold">{row.uc}</div>
                                                         <div className="text-xs text-slate-500 whitespace-normal max-w-[350px] leading-tight mt-0.5" title={row.nome_cliente}>
                                                             {row.id_negocio ? (
-                                                                <a href={`https://crm.rdstation.com/app/deals/${row.id_negocio}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline transition-colors inline-flex items-center gap-1 group" title="Abrir negócio no RD Station CRM">
-                                                                    <span>{row.nome_cliente || 'Sem Nome'}</span>
-                                                                    <ExternalLink size={10} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                                                <a href={`https://crm.rdstation.com/app/deals/${row.id_negocio}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline transition-colors inline-flex items-center gap-1 group">
+                                                                    <span>{row.nome_cliente || 'Sem Nome'}</span><ExternalLink size={10} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                                                                 </a>
-                                                            ) : (
-                                                                <span>{row.nome_cliente || 'Sem Nome'}</span>
-                                                            )}
+                                                            ) : <span>{row.nome_cliente || 'Sem Nome'}</span>}
                                                         </div>
                                                     </td>
 
                                                     {colunasAtivas.includes('Ações (Links)') && (
                                                         <td className="px-5 py-3 text-center">
                                                             <div className="flex items-center justify-center gap-2">
-                                                                {/* BOTÃO FATURA CONCESSIONÁRIA */}
                                                                 {row.fonte_dados === 'UNIFICA' ? (
-                                                                    <button 
-                                                                        onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'FATURA', `btn_fat_${chaveLinha}`)}
-                                                                        disabled={loadingDownloads[`btn_fat_${chaveLinha}`]}
-                                                                        title="Fatura da Concessionária (Plataforma Gestão)" 
-                                                                        className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors disabled:opacity-50"
-                                                                    >
+                                                                    <button onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'FATURA', `btn_fat_${chaveLinha}`)} disabled={loadingDownloads[`btn_fat_${chaveLinha}`]} title="Fatura da Concessionária" className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors disabled:opacity-50">
                                                                         {loadingDownloads[`btn_fat_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16} />}
                                                                     </button>
                                                                 ) : linkBoletoLumiDireto ? (
-                                                                    <a 
-                                                                        href={linkBoletoLumiDireto} 
-                                                                        target="_blank" rel="noopener noreferrer" 
-                                                                        title="Fatura da Concessionária (Lumi)" 
-                                                                        className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors flex items-center justify-center"
-                                                                    >
-                                                                        <FileDown size={16} />
-                                                                    </a>
-                                                                ) : (
-                                                                    <div title="Fatura da Concessionária não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed">
-                                                                        <FileDown size={16} />
-                                                                    </div>
-                                                                )}
+                                                                    <a href={linkBoletoLumiDireto} target="_blank" rel="noopener noreferrer" title="Fatura da Concessionária" className="p-1.5 bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-400 rounded-md transition-colors flex items-center justify-center"><FileDown size={16} /></a>
+                                                                ) : <div title="Indisponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed"><FileDown size={16} /></div>}
                                                                 
-                                                                {/* BOTÃO BOLETO SIMPLIFICA */}
                                                                 {row.fonte_dados === 'UNIFICA' ? (
-                                                                    <button 
-                                                                        onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'BOLETO', `btn_bol_${chaveLinha}`)}
-                                                                        disabled={loadingDownloads[`btn_bol_${chaveLinha}`]}
-                                                                        title="Boleto Simplifica (Plataforma Gestão)" 
-                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50"
-                                                                    >
+                                                                    <button onClick={() => handleDownloadGestao(row.uc, row.mes_referencia, 'BOLETO', `btn_bol_${chaveLinha}`)} disabled={loadingDownloads[`btn_bol_${chaveLinha}`]} title="Boleto Simplifica" className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50">
                                                                         {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
                                                                     </button>
                                                                 ) : row.fonte_dados === 'LUMI' ? (
-                                                                    <button 
-                                                                        onClick={() => handleDownloadBoletoLumi(row.uc, row.mes_referencia, `btn_bol_${chaveLinha}`)}
-                                                                        disabled={loadingDownloads[`btn_bol_${chaveLinha}`]}
-                                                                        title="Boleto Simplifica (Gerar via Lumi)" 
-                                                                        className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50 flex items-center justify-center"
-                                                                    >
+                                                                    <button onClick={() => handleDownloadBoletoLumi(row.uc, row.mes_referencia, `btn_bol_${chaveLinha}`)} disabled={loadingDownloads[`btn_bol_${chaveLinha}`]} title="Boleto Simplifica (Lumi)" className="p-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-md transition-colors disabled:opacity-50 flex items-center justify-center">
                                                                         {loadingDownloads[`btn_bol_${chaveLinha}`] ? <Loader2 size={16} className="animate-spin"/> : <Receipt size={16} />}
                                                                     </button>
-                                                                ) : (
-                                                                    <div title="Link de cobrança não disponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed">
-                                                                        <Receipt size={16} />
-                                                                    </div>
-                                                                )}
+                                                                ) : <div title="Indisponível" className="p-1.5 bg-slate-900 text-slate-700 rounded-md cursor-not-allowed"><Receipt size={16} /></div>}
                                                             </div>
                                                         </td>
                                                     )}
@@ -1149,29 +928,11 @@ export default function PortalParceiro() {
                                                     <td className="px-5 py-3 text-right font-mono text-emerald-400">{Number(row.compensacao_kwh).toLocaleString('pt-BR')}</td>
                                                     <td className="px-5 py-3 text-right font-medium text-yellow-400">{formatMoney(row.boleto_simplifica)}</td>
 
-                                                    {colunasAtivas.includes('Fatura Dist. (R$)') && (
-                                                        <td className="px-5 py-3 text-right font-mono text-slate-300">
-                                                            {formatMoney(row.valor_fatura_distribuidora || 0)}
-                                                        </td>
-                                                    )}
+                                                    {colunasAtivas.includes('Fatura Dist. (R$)') && <td className="px-5 py-3 text-right font-mono text-slate-300">{formatMoney(row.valor_fatura_distribuidora || 0)}</td>}
+                                                    {colunasAtivas.includes('Eficiência (%)') && <td className="px-5 py-3 text-center">{row.eficiencia_compensacao > 0 ? <span className={`px-2 py-1 rounded text-[10px] font-bold border ${eficColor} ${eficBg}`}>{eficPercent.toFixed(1)}%</span> : <span className="text-slate-600">-</span>}</td>}
 
-                                                    {colunasAtivas.includes('Eficiência (%)') && (
-                                                        <td className="px-5 py-3 text-center">
-                                                            {row.eficiencia_compensacao > 0 ? (
-                                                                <span className={`px-2 py-1 rounded text-[10px] font-bold border ${eficColor} ${eficBg}`}>
-                                                                    {eficPercent.toFixed(1)}%
-                                                                </span>
-                                                            ) : <span className="text-slate-600">-</span>}
-                                                        </td>
-                                                    )}
-
-                                                    {colunasAtivas.includes('Percentual (%)') && (
-                                                        <td className="px-5 py-3 text-center text-slate-400 font-mono">
-                                                            {row.percentual_comissao > 0 ? `${row.percentual_comissao}%` : '-'}
-                                                        </td>
-                                                    )}
-
-                                                    {colunasAtivas.includes('Comissão (R$)') && (
+                                                    {colunasAtivas.includes('Percentual Parceiro (%)') && <td className="px-5 py-3 text-center text-slate-400 font-mono">{row.perc_parceiro_rec > 0 ? `${row.perc_parceiro_rec}%` : '-'}</td>}
+                                                    {colunasAtivas.includes('Comissão Parceiro (R$)') && (
                                                         <td className="px-5 py-3 text-right font-mono text-indigo-400 font-bold">
                                                             {(() => {
                                                                 if (!isPago) return <span className="text-slate-600 font-normal">-</span>;
@@ -1179,22 +940,33 @@ export default function PortalParceiro() {
                                                                 if (row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM') {
                                                                     baseCalc = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
                                                                 }
-                                                                
-                                                                const perc = row.percentual_comissao || 0;
-                                                                const comissaoVal = baseCalc * (perc / 100);
+                                                                const comissaoVal = baseCalc * ((row.perc_parceiro_rec || 0) / 100);
                                                                 return comissaoVal > 0 ? formatMoney(comissaoVal) : <span className="text-slate-600 font-normal">-</span>;
                                                             })()}
                                                         </td>
                                                     )}
-
-                                                    {colunasAtivas.includes('Saldo (kWh)') && <td className="px-5 py-3 text-right font-mono text-cyan-400">{Number(row.saldo || 0).toLocaleString('pt-BR')}</td>}
-
-                                                    {colunasAtivas.includes('Etapa') && <td className="px-5 py-3 text-left text-xs text-slate-300">{row.objetivo_etapa || '-'}</td>}
-                                                    {colunasAtivas.includes('Status Pagamento') && (
-                                                        <td className="px-5 py-3 text-center">
-                                                            {badge.text !== '-' ? <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold border ${badge.color} ${badge.bg}`}>{badge.text}</span> : <span className="text-slate-600">-</span>}
+                                                    
+                                                    {colunasAtivas.includes('Nome Indicador') && <td className="px-5 py-3 text-left text-xs font-medium text-slate-300">{row.nome_indicador || '-'}</td>}
+                                                    {colunasAtivas.includes('Percentual Indicador (%)') && <td className="px-5 py-3 text-center text-slate-400 font-mono">{row.perc_indicador_rec > 0 ? `${row.perc_indicador_rec}%` : '-'}</td>}
+                                                    {colunasAtivas.includes('Comissão Indicador (R$)') && (
+                                                        <td className="px-5 py-3 text-right font-mono text-fuchsia-400 font-bold">
+                                                            {(() => {
+                                                                if (!isPago) return <span className="text-slate-600 font-normal">-</span>;
+                                                                let baseCalc = row.valor_real_cobranca || row.boleto_simplifica || 0;
+                                                                if (row.concessionaria?.toUpperCase().includes('EQUATORIAL') && row.concessionaria?.toUpperCase().includes('GO') && row.is_consorcio?.toUpperCase() === 'SIM') {
+                                                                    baseCalc = Math.max(0, (row.valor_real_cobranca || row.boleto_simplifica || 0) - (row.valor_fatura_distribuidora || 0));
+                                                                }
+                                                                const comissaoVal = baseCalc * ((row.perc_indicador_rec || 0) / 100);
+                                                                return comissaoVal > 0 ? formatMoney(comissaoVal) : <span className="text-slate-600 font-normal">-</span>;
+                                                            })()}
                                                         </td>
                                                     )}
+                                                    
+                                                    {colunasAtivas.includes('Percentual Total (%)') && <td className="px-5 py-3 text-center text-slate-400 font-mono">{row.perc_total_rec > 0 ? `${row.perc_total_rec}%` : '-'}</td>}
+
+                                                    {colunasAtivas.includes('Saldo (kWh)') && <td className="px-5 py-3 text-right font-mono text-cyan-400">{Number(row.saldo || 0).toLocaleString('pt-BR')}</td>}
+                                                    {colunasAtivas.includes('Etapa') && <td className="px-5 py-3 text-left text-xs text-slate-300">{row.objetivo_etapa || '-'}</td>}
+                                                    {colunasAtivas.includes('Status Pagamento') && <td className="px-5 py-3 text-center">{badge.text !== '-' ? <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold border ${badge.color} ${badge.bg}`}>{badge.text}</span> : <span className="text-slate-600">-</span>}</td>}
                                                     {colunasAtivas.includes('Concessionária') && <td className="px-5 py-3 text-left text-xs text-slate-400">{row.concessionaria || '-'}</td>}
                                                     {colunasAtivas.includes('Mês Referência') && <td className="px-5 py-3 text-center font-mono text-xs text-slate-400">{formatMesRef(row.mes_referencia)}</td>}
                                                     {colunasAtivas.includes('Economia (R$)') && <td className="px-5 py-3 text-right text-emerald-500">{formatMoney(row.economia_rs)}</td>}
@@ -1206,42 +978,14 @@ export default function PortalParceiro() {
                                                     
                                                     {colunasAtivas.includes('Código PIX') && (
                                                         <td className="px-5 py-3 text-left text-xs font-mono text-slate-400">
-                                                            {isPago ? (
-                                                                <span className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Fatura Paga</span>
-                                                            ) : row.codigo_pix ? (
-                                                                <span className="bg-slate-950 border border-slate-700 px-2 py-1 rounded truncate max-w-[120px] inline-block cursor-pointer hover:border-yellow-500" title="Clique para copiar" onClick={() => navigator.clipboard.writeText(row.codigo_pix)}>{row.codigo_pix}</span>
-                                                            ) : row.asaas_id ? (
-                                                                !isAlexandria ? (
-                                                                    <span className="text-slate-500 text-[10px] uppercase font-bold px-2 py-1 bg-slate-800 rounded border border-slate-700" title="Geração de código via painel desabilitada para este parceiro">Emissão Restrita</span>
-                                                                ) : codigosAsaas[chaveLinha]?.pix ? (
-                                                                    <span className="bg-slate-950 border border-slate-700 px-2 py-1 rounded truncate max-w-[120px] inline-block cursor-pointer hover:border-emerald-500 text-emerald-400" title={codigosAsaas[chaveLinha]?.pix} onClick={() => navigator.clipboard.writeText(codigosAsaas[chaveLinha]?.pix!)}>{codigosAsaas[chaveLinha]?.pix}</span>
-                                                                ) : (
-                                                                    <button onClick={() => handleGerarCodigos(row.asaas_id, chaveLinha)} disabled={codigosAsaas[chaveLinha]?.loading} className="px-2 py-1 bg-slate-800 hover:bg-blue-600 text-white border border-slate-700 rounded font-sans text-[10px] uppercase font-bold disabled:opacity-50 transition-colors shadow-sm">
-                                                                        {codigosAsaas[chaveLinha]?.loading ? 'Gerando...' : 'Gerar PIX Lumi'}
-                                                                    </button>
-                                                                )
-                                                            ) : '-'}
+                                                            {isPago ? <span className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Fatura Paga</span> : row.codigo_pix ? <span className="bg-slate-950 border border-slate-700 px-2 py-1 rounded truncate max-w-[120px] inline-block cursor-pointer hover:border-yellow-500" onClick={() => navigator.clipboard.writeText(row.codigo_pix)}>{row.codigo_pix}</span> : row.asaas_id ? (!isAlexandria ? <span className="text-slate-500 text-[10px] uppercase font-bold px-2 py-1 bg-slate-800 rounded border border-slate-700">Emissão Restrita</span> : codigosAsaas[chaveLinha]?.pix ? <span className="bg-slate-950 border border-slate-700 px-2 py-1 rounded truncate max-w-[120px] inline-block cursor-pointer hover:border-emerald-500 text-emerald-400" onClick={() => navigator.clipboard.writeText(codigosAsaas[chaveLinha]?.pix!)}>{codigosAsaas[chaveLinha]?.pix}</span> : <button onClick={() => handleGerarCodigos(row.asaas_id, chaveLinha)} disabled={codigosAsaas[chaveLinha]?.loading} className="px-2 py-1 bg-slate-800 hover:bg-blue-600 text-white border border-slate-700 rounded font-sans text-[10px] uppercase font-bold disabled:opacity-50 transition-colors shadow-sm">{codigosAsaas[chaveLinha]?.loading ? 'Gerando...' : 'Gerar PIX Lumi'}</button>) : '-'}
                                                         </td>
                                                     )}
-                                                    
                                                     {colunasAtivas.includes('Código de Barras') && (
                                                         <td className="px-5 py-3 text-left text-xs font-mono text-slate-400">
-                                                            {isPago ? (
-                                                                <span className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Fatura Paga</span>
-                                                            ) : row.codigo_barras ? (
-                                                                <span className="bg-slate-950 border border-slate-700 px-2 py-1 rounded truncate max-w-[120px] inline-block cursor-pointer hover:border-yellow-500" title="Clique para copiar" onClick={() => navigator.clipboard.writeText(row.codigo_barras)}>{row.codigo_barras}</span>
-                                                            ) : row.asaas_id ? (
-                                                                !isAlexandria ? (
-                                                                    <span className="text-slate-500 text-[10px] uppercase font-bold px-2 py-1 bg-slate-800 rounded border border-slate-700" title="Geração de código via painel desabilitada para este parceiro">Emissão Restrita</span>
-                                                                ) : codigosAsaas[chaveLinha]?.barcode ? (
-                                                                    <span className="bg-slate-950 border border-slate-700 px-2 py-1 rounded truncate max-w-[120px] inline-block cursor-pointer hover:border-emerald-500 text-emerald-400" title={codigosAsaas[chaveLinha]?.barcode} onClick={() => navigator.clipboard.writeText(codigosAsaas[chaveLinha]?.barcode!)}>{codigosAsaas[chaveLinha]?.barcode}</span>
-                                                                ) : (
-                                                                    <span className="text-slate-600 text-[10px] uppercase font-bold px-2 py-1 bg-slate-900 rounded border border-slate-800">Gere via botão PIX</span>
-                                                                )
-                                                            ) : '-'}
+                                                            {isPago ? <span className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Fatura Paga</span> : row.codigo_barras ? <span className="bg-slate-950 border border-slate-700 px-2 py-1 rounded truncate max-w-[120px] inline-block cursor-pointer hover:border-yellow-500" onClick={() => navigator.clipboard.writeText(row.codigo_barras)}>{row.codigo_barras}</span> : row.asaas_id ? (!isAlexandria ? <span className="text-slate-500 text-[10px] uppercase font-bold px-2 py-1 bg-slate-800 rounded border border-slate-700">Emissão Restrita</span> : codigosAsaas[chaveLinha]?.barcode ? <span className="bg-slate-950 border border-slate-700 px-2 py-1 rounded truncate max-w-[120px] inline-block cursor-pointer hover:border-emerald-500 text-emerald-400" onClick={() => navigator.clipboard.writeText(codigosAsaas[chaveLinha]?.barcode!)}>{codigosAsaas[chaveLinha]?.barcode}</span> : <span className="text-slate-600 text-[10px] uppercase font-bold px-2 py-1 bg-slate-900 rounded border border-slate-800">Gere via botão PIX</span>) : '-'}
                                                         </td>
                                                     )}
-
                                                 </tr>
                                             )
                                         })}
@@ -1263,60 +1007,26 @@ export default function PortalParceiro() {
                 {/* ABA 2: RELATÓRIO DO CLIENTE (PRINT-FRIENDLY A4) */}
                 {activeTab === 'relatorio' && (
                     <div id="relatorio-print-container" className="flex flex-col gap-6 w-full mx-auto print:max-w-[210mm] page-break-inside-avoid">
-                        {/* CONTROLES DE IMPRESSÃO */}
                         <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden flex flex-col sm:flex-row gap-4 justify-between items-center z-20 max-w-[900px] w-full mx-auto">
                             <div className="flex flex-col gap-1 w-full sm:w-[400px]">
                                 <label className="text-xs font-bold font-display text-slate-400 uppercase tracking-wider">Selecione o Cliente / UC</label>
                                 <div className="relative w-full" ref={dropdownRelatorioRef}>
                                     <Search className="absolute left-3 top-2.5 text-slate-500" size={16}/>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Digite nome ou UC..." 
-                                        value={buscaRelatorio}
-                                        onChange={e => {
-                                            setBuscaRelatorio(e.target.value);
-                                            setShowUcDropdown(true);
-                                        }}
-                                        onFocus={() => setShowUcDropdown(true)}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-10 pr-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                                    />
+                                    <input type="text" placeholder="Digite nome ou UC..." value={buscaRelatorio} onChange={e => { setBuscaRelatorio(e.target.value); setShowUcDropdown(true); }} onFocus={() => setShowUcDropdown(true)} className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-10 pr-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"/>
                                     {showUcDropdown && buscaRelatorio && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto">
                                             {ucsUnicas.filter(c => c.label.toLowerCase().includes(buscaRelatorio.toLowerCase())).map(c => (
-                                                <div 
-                                                    key={c.uc} 
-                                                    className="p-3 border-b border-slate-800 hover:bg-slate-800 cursor-pointer text-sm text-slate-200"
-                                                    onClick={() => {
-                                                        setRelatorioUc(c.uc);
-                                                        setBuscaRelatorio(c.label);
-                                                        setShowUcDropdown(false);
-                                                    }}
-                                                >
-                                                    {c.label}
-                                                </div>
+                                                <div key={c.uc} className="p-3 border-b border-slate-800 hover:bg-slate-800 cursor-pointer text-sm text-slate-200" onClick={() => { setRelatorioUc(c.uc); setBuscaRelatorio(c.label); setShowUcDropdown(false); }}>{c.label}</div>
                                             ))}
-                                            {ucsUnicas.filter(c => c.label.toLowerCase().includes(buscaRelatorio.toLowerCase())).length === 0 && (
-                                                <div className="p-4 text-center text-sm text-slate-500">Nenhum cliente encontrado</div>
-                                            )}
                                         </div>
                                     )}
                                 </div>
                             </div>
-                            
-                            <button 
-                                onClick={() => window.print()}
-                                disabled={!relatorioData}
-                                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center gap-2 transition-colors w-full sm:w-auto justify-center"
-                            >
-                                <Printer size={18}/> Salvar / Imprimir (PDF)
-                            </button>
+                            <button onClick={() => window.print()} disabled={!relatorioData} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center gap-2 transition-colors w-full sm:w-auto justify-center"><Printer size={18}/> Salvar / Imprimir (PDF)</button>
                         </div>
 
-                        {/* O RELATÓRIO EM SI */}
                         {relatorioData ? (
                             <div className="bg-slate-900 print:bg-[#0a0a0a] border border-slate-800 rounded-2xl p-8 shadow-2xl print:border-none print:shadow-none print:p-2 print:m-0 w-full max-w-[900px] mx-auto print:max-w-full print:text-white page-break-inside-avoid">
-                                
-                                {/* HEADER RELATÓRIO */}
                                 <div className="flex justify-between items-start border-b border-slate-800 pb-6 print:pb-3 mb-6 print:mb-5">
                                     <div>
                                         <h1 className="text-3xl print:text-2xl font-display font-bold text-white mb-1">{relatorioData.infoCadastral.nome_cliente}</h1>
@@ -1329,7 +1039,6 @@ export default function PortalParceiro() {
                                     </div>
                                 </div>
 
-                                {/* INFO CADASTRAL E STATUS */}
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-3 mb-8 print:mb-6">
                                     <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Concessionária</p>
@@ -1341,30 +1050,20 @@ export default function PortalParceiro() {
                                     </div>
                                     <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Eficiência Média</p>
-                                        <p className={`text-sm print:text-xs font-bold ${relatorioData.eficienciaMedia >= 90 ? 'text-emerald-400' : relatorioData.eficienciaMedia >= 70 ? 'text-yellow-400' : 'text-rose-400'}`}>
-                                            {relatorioData.eficienciaMedia > 0 ? relatorioData.eficienciaMedia.toFixed(1) + '%' : 'N/D'}
-                                        </p>
+                                        <p className={`text-sm print:text-xs font-bold ${relatorioData.eficienciaMedia >= 90 ? 'text-emerald-400' : relatorioData.eficienciaMedia >= 70 ? 'text-yellow-400' : 'text-rose-400'}`}>{relatorioData.eficienciaMedia > 0 ? relatorioData.eficienciaMedia.toFixed(1) + '%' : 'N/D'}</p>
                                     </div>
                                     <div className="bg-slate-950 p-4 print:p-3 rounded-xl border border-slate-800 print:border-slate-800">
                                         <p className="text-[10px] print:text-[9px] font-bold text-slate-500 uppercase mb-1">Consumo Total</p>
-                                        <p className="text-sm print:text-xs font-bold text-slate-200">
-                                            {Math.round(relatorioData.totalConsumo).toLocaleString('pt-BR')} kWh
-                                        </p>
+                                        <p className="text-sm print:text-xs font-bold text-slate-200">{Math.round(relatorioData.totalConsumo).toLocaleString('pt-BR')} kWh</p>
                                     </div>
                                 </div>
 
-                                {/* GRANDES NÚMEROS DE ECONOMIA E COMPENSAÇÃO */}
                                 <div className="flex flex-col sm:flex-row gap-6 print:gap-5 mb-8 print:mb-6 page-break-inside-avoid">
                                     <div className="flex-1 bg-emerald-900/10 border border-emerald-800/30 print:border-emerald-800/50 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <PiggyBank size={32} className="text-emerald-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
                                         <p className="text-xs print:text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Economia Total Acumulada</p>
                                         <h2 className="text-4xl print:text-3xl font-display font-extrabold text-white">{formatMoney(relatorioData.totalEco)}</h2>
-                                        
-                                        {relatorioData.mesesGratis > 0 && (
-                                            <div className="mt-3 print:mt-2 bg-emerald-500/20 text-emerald-400 px-3 py-1 print:py-1 rounded-full text-[10px] print:text-[9px] font-bold uppercase tracking-wider border border-emerald-500/30">
-                                                🎉 Equivale a {relatorioData.mesesGratis.toFixed(1).replace('.0', '')} faturas grátis
-                                            </div>
-                                        )}
+                                        {relatorioData.mesesGratis > 0 && <div className="mt-3 print:mt-2 bg-emerald-500/20 text-emerald-400 px-3 py-1 print:py-1 rounded-full text-[10px] print:text-[9px] font-bold uppercase tracking-wider border border-emerald-500/30">🎉 Equivale a {relatorioData.mesesGratis.toFixed(1).replace('.0', '')} faturas grátis</div>}
                                     </div>
                                     <div className="flex-1 bg-blue-900/10 border border-blue-800/30 print:border-blue-800/50 p-6 print:p-5 rounded-2xl flex items-center justify-center flex-col text-center">
                                         <Zap size={32} className="text-blue-500 mb-3 print:mb-2 print:h-8 print:w-8"/>
@@ -1373,7 +1072,6 @@ export default function PortalParceiro() {
                                     </div>
                                 </div>
 
-                                {/* MÉTRICAS FINANCEIRAS COMPARATIVAS */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:gap-3 mb-10 print:mb-8 page-break-inside-avoid">
                                     <div className="bg-slate-900 p-4 print:p-3 border border-slate-700 rounded-xl flex justify-between items-center">
                                         <div className="flex items-center gap-3 print:gap-2">
@@ -1391,7 +1089,6 @@ export default function PortalParceiro() {
                                     </div>
                                 </div>
 
-                                {/* GRÁFICO (ÚNICO E ALARGADO) */}
                                 <div className="mb-10 print:mb-30 print-break-avoid relative z-0">
                                     <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-6 print:mb-4 flex items-center gap-2"><Activity size={16}/> Consumo vs Compensação (Últimos 12 meses)</h3>
                                     <div className="w-full h-[300px] print:h-[300px]">
@@ -1407,7 +1104,6 @@ export default function PortalParceiro() {
                                     </div>
                                 </div>
 
-                                {/* EXTRATO FINAL DAS ÚLTIMAS FATURAS */}
                                 <div className="print-break-avoid pt-4 print:pt-[42px] relative z-10">
                                     <h3 className="text-sm print:text-xs font-bold text-slate-300 mb-4 print:mb-3 border-b border-slate-800 pb-2">Extrato das Últimas Faturas</h3>
                                     <table className="w-full text-sm print:text-xs text-left">
@@ -1456,132 +1152,119 @@ export default function PortalParceiro() {
                 {activeTab === 'comissao' && (
                     <div className="flex flex-col gap-6 w-full mx-auto print:max-w-[297mm]">
                         
-                        {/* CONTROLES DE FILTRO ATUALIZADOS */}
-                        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden flex flex-col sm:flex-row gap-4 items-end z-20 max-w-[1100px] w-full mx-auto">
+                        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden flex flex-col sm:flex-row gap-4 items-end z-20 max-w-[1300px] w-full mx-auto">
                             {isAdmin && (
                                 <div className="flex flex-col gap-1 w-full sm:w-[350px]">
-                                    <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider">Selecione o Parceiro</label>
-                                    <SingleSearchSelect
-                                        options={optParceiros}
-                                        selected={comissaoParceiro}
-                                        onChange={setComissaoParceiro}
-                                        placeholder="Selecione..."
-                                        fullWidth={true}
-                                    />
+                                    <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider text-indigo-400">Selecione o Parceiro</label>
+                                    <SingleSearchSelect options={optParceiros} selected={comissaoParceiro} onChange={setComissaoParceiro} placeholder="Selecione..." fullWidth={true} />
                                 </div>
                             )}
 
+                            {/* NOVO FILTRO CASCATA PARA INDICADOR NO RELATÓRIO DE COMISSÃO */}
+                            <div className="flex flex-col gap-1 w-full sm:w-[350px]">
+                                <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider text-fuchsia-400">Filtrar por Indicador</label>
+                                <SingleSearchSelect options={optIndicadoresComissao} selected={comissaoIndicador} onChange={setComissaoIndicador} placeholder="Todos os Indicadores" fullWidth={true} />
+                            </div>
+
                             <div className="flex flex-col gap-1 w-full sm:w-[200px]">
                                 <label className="text-[10px] font-bold font-display text-slate-500 uppercase tracking-wider">Mês de Referência</label>
-                                <select
-                                    value={comissaoMes}
-                                    onChange={e => setComissaoMes(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-[#a3e635] transition-all"
-                                >
+                                <select value={comissaoMes} onChange={e => setComissaoMes(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-[#a3e635] transition-all">
                                     <option value="">Selecione...</option>
                                     {optMes.map(m => <option key={m} value={m}>{m}</option>)}
                                 </select>
                             </div>
                             
-                            <button 
-                                onClick={() => window.print()}
-                                disabled={!relatorioComissaoData}
-                                className="px-6 py-2.5 bg-[#84cc16] hover:bg-[#65a30d] disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center gap-2 transition-colors ml-auto shadow-[0_0_15px_rgba(132,204,22,0.3)] disabled:shadow-none"
-                            >
+                            <button onClick={() => window.print()} disabled={!relatorioComissaoData} className="px-6 py-2.5 bg-[#84cc16] hover:bg-[#65a30d] disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center gap-2 transition-colors ml-auto shadow-[0_0_15px_rgba(132,204,22,0.3)] disabled:shadow-none">
                                 <Printer size={18}/> Salvar / Imprimir (PDF)
                             </button>
                         </div>
 
-                        {/* CORPO DO RELATÓRIO DE COMISSÃO ATUALIZADO */}
                         {!relatorioComissaoData ? (
-                            <div className="flex flex-col items-center justify-center p-20 text-slate-500 print:hidden bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-[1100px] mx-auto">
+                            <div className="flex flex-col items-center justify-center p-20 text-slate-500 print:hidden bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-[1300px] mx-auto">
                                 <Wallet size={64} className="opacity-20 mb-4"/>
                                 <p className="text-lg font-bold font-display">Nenhum dado encontrado</p>
                                 <p className="text-sm text-center">Selecione o parceiro e o mês acima, ou verifique se existem faturas pagas neste mês.</p>
                             </div>
                         ) : (
-                            <div className="bg-white text-slate-800 p-8 rounded-2xl shadow-xl print:shadow-none print:p-0 w-full max-w-[1100px] mx-auto print:max-w-full page-break-inside-avoid relative overflow-hidden">
+                            <div className="bg-white text-slate-800 p-8 rounded-2xl shadow-xl print:shadow-none print:p-0 w-full max-w-[1300px] mx-auto print:max-w-full page-break-inside-avoid relative overflow-hidden">
                                 
                                 <div className="flex justify-between items-center mb-6 px-2 relative z-10">
-                                    <img src="https://www.ludfor.com.br/arquivos/2010a4818c8689275e42d724e5084d4a43400d86.jpg" alt="Simplifica" className="h-20 object-contain" />
-                                    <div className="text-right text-[11px] leading-tight text-slate-600">
-    <p className="font-bold text-[#84cc16] text-[13px] mb-1 tracking-wide">Energia renovável acessível</p>
-    <p>simplificaenergia.com.br</p>
-</div>
+                                    <img src="https://www.ludfor.com.br/arquivos/2010a4818c8689275e42d724e5084d4a43400d86.jpg" alt="Simplifica" className="h-16 object-contain" />
+                                    <div className="text-right text-xs font-bold text-slate-500 tracking-wide uppercase">
+                                        CANAL DE PARCEIROS SIMPLIFICA ENERGIA
+                                    </div>
                                 </div>
 
-                                <div className="bg-[#a3e635] print:bg-[#a3e635] text-white text-center font-bold py-2.5 text-xl uppercase tracking-widest mb-6 rounded-sm shadow-sm print:shadow-none relative z-10">
-                                    Relatório de Comissão
+                                <div className="bg-[#a3e635] print:bg-[#a3e635] text-white text-center font-bold py-2 text-lg uppercase tracking-widest mb-6">
+                                    RELATÓRIO DE COMISSÃO
                                 </div>
 
-                                <div className="flex justify-between items-center text-center border-y-2 border-[#a3e635] py-4 mb-8 px-2 relative z-10">
-                                    <div className="flex-1 px-2 border-r border-slate-300">
-                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider">Parceiro</p>
+                                <div className="flex justify-between items-center text-center border-y-2 border-slate-200 py-4 mb-8 px-2">
+                                    <div className="flex-1 px-2 border-r border-slate-200">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider">Parceiro Dono</p>
                                         <p className="text-sm font-bold text-slate-700 uppercase">{relatorioComissaoData.parceiro}</p>
                                     </div>
-                                    <div className="flex-1 px-2 border-r border-slate-300">
-                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider whitespace-nowrap">Consumo Total - kWh</p>
-                                        <p className="text-sm font-bold text-slate-700">{Math.round(relatorioComissaoData.consumoTotal).toLocaleString('pt-BR')}</p>
+                                    <div className="flex-1 px-2 border-r border-slate-200">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider whitespace-nowrap">Concessionárias</p>
+                                        <p className="text-sm font-bold text-slate-700">{relatorioComissaoData.concessionarias}</p>
                                     </div>
-                                    <div className="flex-1 px-2 border-r border-slate-300">
-                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider whitespace-nowrap">Compensação Total - kWh</p>
-                                        <p className="text-sm font-bold text-slate-700">{Math.round(relatorioComissaoData.compensacaoTotal).toLocaleString('pt-BR')}</p>
+                                    <div className="flex-1 px-2 border-r border-slate-200">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider whitespace-nowrap">Consumo (MWh)</p>
+                                        <p className="text-[15px] font-bold text-slate-700">{new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(relatorioComissaoData.consumoTotal / 1000)} MWh</p>
                                     </div>
-                                    <div className="flex-1 px-2 border-r border-slate-300">
-                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider whitespace-nowrap">Total da Comissão</p>
-                                        <p className="text-[15px] font-extrabold text-slate-900">{formatMoney(relatorioComissaoData.comissaoTotal)}</p>
+                                    <div className="flex-1 px-2 border-r border-slate-200">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider whitespace-nowrap">Mês Ref.</p>
+                                        <p className="text-sm font-bold text-slate-700 uppercase">{relatorioComissaoData.mes}</p>
+                                    </div>
+                                    <div className="flex-1 px-2 border-r border-slate-200">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider whitespace-nowrap">Comissão Parceiro</p>
+                                        <p className="text-[15px] font-extrabold text-slate-900">{formatMoney(relatorioComissaoData.comissaoParceiroTotal)}</p>
                                     </div>
                                     <div className="flex-1 px-2">
-                                        <p className="text-[10px] font-bold text-[#a3e635] uppercase mb-1 tracking-wider whitespace-nowrap">Mês de Referência</p>
-                                        <p className="text-sm font-bold text-slate-700 uppercase">{relatorioComissaoData.mes}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider whitespace-nowrap">Comissão Indicador</p>
+                                        <p className="text-[15px] font-extrabold text-slate-900">{formatMoney(relatorioComissaoData.comissaoIndicadorTotal)}</p>
                                     </div>
                                 </div>
 
-                                <div className="border-2 border-[#a3e635] rounded-xl p-4 overflow-x-auto relative z-10">
-                                    <table className="w-full text-[11px] text-left border-collapse sticky-header">
+                                <div className="border border-slate-200 rounded-lg p-4 overflow-x-auto">
+                                    <table className="w-full text-xs text-left border-collapse">
                                         <thead>
-                                            <tr className="text-[#84cc16] border-b border-[#a3e635] text-[9px] whitespace-nowrap px-1 sticky top-0 bg-white z-10">
-                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide whitespace-nowrap">Clientes</th>
-                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide whitespace-nowrap">UC</th>
-                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Consumo Médio</th>
-                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Compensação</th>
-                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-center whitespace-nowrap">Distribuidora</th>
-                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Boleto (R$)</th>
-                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-center whitespace-nowrap">Percentual (%)</th>
-                                                <th className="pb-3 px-1 font-bold uppercase tracking-wide text-right whitespace-nowrap">Comissão (R$)</th>
+                                            <tr className="text-[#84cc16] border-b border-slate-200 whitespace-nowrap px-1">
+                                                <th className="pb-3 px-2 font-bold uppercase tracking-wide">Cliente</th>
+                                                <th className="pb-3 px-2 font-bold uppercase tracking-wide">UC</th>
+                                                <th className="pb-3 px-2 font-bold uppercase tracking-wide text-right">Boleto Pago</th>
+                                                <th className="pb-3 px-2 font-bold uppercase tracking-wide text-center">% Parc.</th>
+                                                <th className="pb-3 px-2 font-bold uppercase tracking-wide text-right">Comis. Parc.</th>
+                                                <th className="pb-3 px-2 font-bold uppercase tracking-wide text-left border-l border-slate-200 pl-4">Indicador</th>
+                                                <th className="pb-3 px-2 font-bold uppercase tracking-wide text-center">% Ind.</th>
+                                                <th className="pb-3 px-2 font-bold uppercase tracking-wide text-right">Comis. Ind.</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-slate-200/60">
+                                        <tbody className="divide-y divide-slate-100">
                                             {relatorioComissaoData.rows.map((row, i) => (
-                                                <tr key={i} className="text-slate-600 hover:bg-slate-50 transition-colors">
-                                                    <td className="py-3 px-2 text-left font-bold text-slate-800">{row.nome_cliente}</td>
-                                                    <td className="py-3 px-2 text-left font-mono">{row.uc}</td>
-                                                    <td className="py-3 px-2 text-right">{Math.round(row.consumo_kwh).toLocaleString('pt-BR')} <span className="text-[9px] text-slate-400 font-normal">kWh</span></td>
-                                                    <td className="py-3 px-2 text-right">{Math.round(row.compensacao_kwh).toLocaleString('pt-BR')} <span className="text-[9px] text-slate-400 font-normal">kWh</span></td>
-                                                    <td className="py-3 px-2 text-center text-xs">{row.concessionaria}</td>
-                                                    <td className="py-3 px-2 text-right font-medium">{formatMoney(row.boleto_simplifica)}</td>
-                                                    <td className="py-3 px-2 text-center font-bold text-slate-500">{row.perc > 0 ? `${row.perc}%` : '-'}</td>
-                                                    <td className="py-3 px-2 text-right font-bold text-[#65a30d]">{row.comissaoVal > 0 ? formatMoney(row.comissaoVal) : '-'}</td>
+                                                <tr key={i} className="text-slate-600">
+                                                    <td className="py-3 px-2 text-left font-semibold text-slate-800">{row.nome_cliente}</td>
+                                                    <td className="py-3 px-2 text-left">{row.uc}</td>
+                                                    <td className="py-3 px-2 text-right">{formatMoney(row.baseCalc)}</td>
+                                                    
+                                                    <td className="py-3 px-2 text-center font-bold text-slate-500">{row.perc_parceiro_rec > 0 ? `${row.perc_parceiro_rec}%` : '-'}</td>
+                                                    <td className="py-3 px-2 text-right font-bold text-slate-800">{row.valParceiro > 0 ? formatMoney(row.valParceiro) : '-'}</td>
+                                                    
+                                                    <td className="py-3 px-2 text-left border-l border-slate-200 pl-4 text-[10px] text-slate-500">{row.nome_indicador || '-'}</td>
+                                                    <td className="py-3 px-2 text-center font-bold text-slate-500">{row.perc_indicador_rec > 0 ? `${row.perc_indicador_rec}%` : '-'}</td>
+                                                    <td className="py-3 px-2 text-right font-bold text-slate-800">{row.valIndicador > 0 ? formatMoney(row.valIndicador) : '-'}</td>
                                                 </tr>
                                             ))}
-                                            <tr className="bg-slate-100 font-bold text-slate-900 border-t-2 border-[#a3e635]">
+                                            <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-[#a3e635]">
                                                 <td className="py-3 px-2 text-left" colSpan={2}>
                                                     Total: <span className="font-medium text-slate-700 ml-2">{relatorioComissaoData.rows.length} UCs</span>
                                                 </td>
-                                                <td className="py-3 px-2 text-right">
-                                                    {Math.round(relatorioComissaoData.consumoTotal).toLocaleString('pt-BR')} <span className="text-[9px] text-slate-500 font-normal">kWh</span>
-                                                </td>
-                                                <td className="py-3 px-2 text-right">
-                                                    {Math.round(relatorioComissaoData.compensacaoTotal).toLocaleString('pt-BR')} <span className="text-[9px] text-slate-500 font-normal">kWh</span>
-                                                </td>
-                                                <td className="py-3 px-2 text-center text-xs"> - </td>
-                                                <td className="py-3 px-2 text-right whitespace-nowrap">
-                                                    {formatMoney(relatorioComissaoData.boletoTotal)}
-                                                </td>
-                                                <td className="py-3 px-2 text-center text-slate-500 font-bold whitespace-nowrap"> - </td>
-                                                <td className="py-3 px-2 text-right text-[#65a30d] whitespace-nowrap">
-                                                    {formatMoney(relatorioComissaoData.comissaoTotal)}
-                                                </td>
+                                                <td className="py-3 px-2 text-right whitespace-nowrap">{formatMoney(relatorioComissaoData.boletoTotal)}</td>
+                                                <td className="py-3 px-2 text-center"></td>
+                                                <td className="py-3 px-2 text-right whitespace-nowrap">{formatMoney(relatorioComissaoData.comissaoParceiroTotal)}</td>
+                                                <td className="py-3 px-2 border-l border-slate-200"></td>
+                                                <td className="py-3 px-2 text-center"></td>
+                                                <td className="py-3 px-2 text-right whitespace-nowrap">{formatMoney(relatorioComissaoData.comissaoIndicadorTotal)}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -1622,8 +1305,8 @@ export default function PortalParceiro() {
                                     <div key={i} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 hover:bg-slate-800/50 border-b border-slate-800/50 transition-colors">
                                         <div className="font-medium text-slate-200">{p.nome_parceiro}</div>
                                         <div className="bg-slate-950 border border-slate-700 px-4 py-2 rounded-lg text-sm font-mono text-yellow-400 flex items-center justify-center min-w-[120px] tracking-wider font-bold">
-    {p.senha}
-</div>
+                                            {p.senha}
+                                        </div>
                                     </div>
                                 ))}
                                 {parceirosAtivos.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum parceiro ativo.</div>}

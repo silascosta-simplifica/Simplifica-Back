@@ -351,7 +351,7 @@ function AdminDashboard() {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null); 
   const [emissaoPage, setEmissaoPage] = useState(1);
   const [emissaoColunas, setEmissaoColunas] = useState<string[]>([]);
-  const emissaoColunasOptions = ['Consumo RD (kWh)', 'Tarifa RD (Estimada)', 'Tarifa Fatura (Real)', 'Consumo (Fatura)', 'Compensação (Fatura)', 'Eficiência (%)', 'Status Pagamento'];
+  const emissaoColunasOptions = ['Consumo RD (kWh)', 'Tarifa RD (Estimada)', 'Tarifa Fatura (Real)', 'Consumo (Fatura)', 'Compensação (Fatura)', 'Eficiência (%)', 'Status Pagamento', 'Saldo Base (kWh)'];
 
   // Filtros CRM
   const [crmSearch, setCrmSearch] = useState('');
@@ -376,16 +376,91 @@ function AdminDashboard() {
   const data = useMemo(() => {
     if (!rawData) return [];
     const parseNum = (val: any) => { if (val === null || val === undefined || val === '') return 0; const n = Number(val); return isNaN(n) ? 0 : n; };
+    
+    // --- 1. PREPARAÇÃO: Dicionário rápido com os saldos por Mês e UC ---
+    const mapSaldo = new Map();
+    rawData.forEach((d: any) => {
+       const uc = d.uc;
+       const mes = d['mês_referência'] || d.mes_referencia_formatado || 'N/D';
+       if (uc && mes !== 'N/D') {
+           mapSaldo.set(`${uc}-${mes}`, parseNum(d.saldo));
+       }
+    });
+
+    // Função utilitária para subtrair 1 mês da string MM/YYYY
+    const getPrevMonth = (mesAno: string) => {
+        if (!mesAno || mesAno === 'N/D') return null;
+        const parts = mesAno.split('/');
+        if (parts.length !== 2) return null;
+        let m = parseInt(parts[0], 10);
+        let y = parseInt(parts[1], 10);
+        m -= 1;
+        if (m === 0) { m = 12; y -= 1; }
+        return `${String(m).padStart(2, '0')}/${y}`;
+    };
+
     return rawData.map((d: any) => {
       const conc = d['concessionária'] || d.concessionaria || d.concessionaria_rd || 'Outra';
       const area = d['área_de_gestão'] || d.area_de_gestao || 'Outros';
       const mes = d['mês_referência'] || d.mes_referencia_formatado || 'N/D';
       const dataEntrada = d.data_protocolo || d['data_do_1º_protocolo'] || d.data_ganho || d.created_at || null;
-      const valorTotal = parseNum(d.total_cobranca) || parseNum(d['total_cobrança_r$']);
-      const valorEstimado = parseNum(d.valor_estimado);
-      const valorRealizado = parseNum(d.valor_real_cobranca);
       const statusRaw = d.status || d['Status Pagamento'];
       const statusFinal = (statusRaw && statusRaw !== 'null' && statusRaw !== '') ? statusRaw : 'Indefinido';
+      
+      const valorEstimadoOriginal = parseNum(d.valor_estimado);
+      const consumoOriginalMwh = parseNum(d.consumo_crm_mwh) || parseNum(d['consumo_médio_na_venda_mwh']);
+      const objetivoOriginal = d.objetivo_etapa || 'Sem Objetivo';
+
+      // --- 2. TRATAMENTO EQUATORIAL GOIÁS ---
+      const dataEmissaoNorm = d.data_emissao || d.emissão_do_boleto;
+      const valorRealizado = parseNum(d.valor_real_cobranca);
+      const valorTotal = parseNum(d.total_cobranca) || parseNum(d['total_cobrança_r$']);
+      const compensacaoRealKwh = parseNum(d.compensacao_kwh ?? d['compensação_total_kwh']);
+      
+      let valorRealizadoFinal = valorRealizado;
+      let totalFaturaFinal = valorTotal;
+      // Garante que o status "Emitido" sobreviva ao zerarmos o valor, caso já tenha sido de fato emitido
+      let forceEmitido = (dataEmissaoNorm || valorRealizado > 0) ? true : false;
+
+      const isEquatorialGO = conc.toUpperCase().includes('EQUATORIAL') && conc.toUpperCase().includes('GO');
+      
+      // Se for Equatorial-GO e vier sem compensação, ignoramos o faturamento no painel geral.
+      if (isEquatorialGO && compensacaoRealKwh === 0) {
+          valorRealizadoFinal = 0;
+          totalFaturaFinal = 0;
+      }
+
+      // --- 3. REGRA DE SALDO: Resgatar do mês anterior ---
+      const prevMonthStr = getPrevMonth(mes);
+      // Busca o mês anterior. Se não achar histórico, faz fallback para o saldo da linha atual.
+      let saldoAnterior = prevMonthStr && mapSaldo.has(`${d.uc}-${prevMonthStr}`) 
+                                ? mapSaldo.get(`${d.uc}-${prevMonthStr}`) 
+                                : parseNum(d.saldo); 
+                                
+      // TRAVA DE ZERO: Se o banco trouxer saldo negativo, consideramos 0 para a previsão comercial
+      saldoAnterior = Math.max(0, saldoAnterior);
+
+      // --- 4. APLICAR VALIDAÇÃO DE ESTIMATIVA ---
+      let consumoFinalMwh = consumoOriginalMwh;
+      let valorEstimadoFinal = valorEstimadoOriginal;
+      
+      const isExclusaoOuStandBy = objetivoOriginal.includes('Exclusão') || 
+                                  objetivoOriginal.includes('Stand-by') || 
+                                  d.status_rd === 'Stand-by';
+
+      if (isExclusaoOuStandBy) {
+          const consumoOriginalKwh = consumoOriginalMwh * 1000;
+          
+          if (saldoAnterior < consumoOriginalKwh) {
+              consumoFinalMwh = saldoAnterior / 1000;
+              
+              if (consumoOriginalKwh > 0) {
+                  valorEstimadoFinal = valorEstimadoOriginal * (saldoAnterior / consumoOriginalKwh);
+              } else {
+                  valorEstimadoFinal = 0;
+              }
+          }
+      }
       
       return {
         ...d,
@@ -394,25 +469,31 @@ function AdminDashboard() {
         concessionaria_norm: conc,
         area_norm: area,
         mes_norm: mes,
-        objetivo_etapa_norm: d.objetivo_etapa || 'Sem Objetivo',
+        objetivo_etapa_norm: objetivoOriginal,
         status_norm: statusFinal,
         fonte_dados: d.fonte_dados, 
-        valor_realizado: valorRealizado,
-        valor_potencial: valorEstimado,
-        total_fatura: valorTotal,
-        consumo_mwh: parseNum(d.consumo_crm_mwh) || parseNum(d['consumo_médio_na_venda_mwh']),
-        compensado_kwh: parseNum(d.compensacao_kwh) || parseNum(d['compensação_total_kwh']),
+        
+        valor_realizado: valorRealizadoFinal,
+        total_fatura: totalFaturaFinal,
+        forceEmitido: forceEmitido,
+        
+        // Passamos os valores ajustados para a interface
+        valor_potencial: valorEstimadoFinal, 
+        consumo_mwh: consumoFinalMwh, 
+        saldo_utilizado_kwh: saldoAnterior, // Nova variável para renderizar na tabela
+        
+        compensado_kwh: compensacaoRealKwh,
         data_entrada_norm: dataEntrada,
         data_saida_norm: d.data_cancelamento || d['data_de_pedido_de_cancelamento'],
         vencimento_norm: d.vencimento || d.vencimento_do_boleto,
-        data_emissao_norm: d.data_emissao || d.emissão_do_boleto,
+        data_emissao_norm: dataEmissaoNorm,
         data_prevista_norm: d.data_emissao_prevista,
         data_emissao_distribuidora: d.data_emissao_distribuidora, 
         tarifa_estimada: parseNum(d.tarifa_estimada),
         tarifa_real: parseNum(d.tarifa_real),
         eficiencia_compensacao: parseNum(d.eficiencia_compensacao),
         consumo_real_kwh: parseNum(d.consumo_kwh ?? d.consumo_real_kwh),
-        compensacao_real_kwh: parseNum(d.compensacao_kwh ?? d['compensação_total_kwh']) 
+        compensacao_real_kwh: compensacaoRealKwh 
       };
     });
   }, [rawData]);
@@ -461,8 +542,8 @@ function AdminDashboard() {
     } catch { return '-'; }
   };
 
-  const getStatusColor = (prevista: string | null, real: string | null, valorRealizado: number) => {
-    if (real || valorRealizado > 0) return { color: 'text-emerald-400', bg: 'bg-emerald-900/30 border border-emerald-800', text: 'Emitido', value: 'Emitido' };
+  const getStatusColor = (prevista: string | null, real: string | null, valorRealizado: number, forceEmitido: boolean = false) => {
+    if (forceEmitido || real || valorRealizado > 0) return { color: 'text-emerald-400', bg: 'bg-emerald-900/30 border border-emerald-800', text: 'Emitido', value: 'Emitido' };
     if (!prevista) return { color: 'text-blue-300', bg: 'bg-blue-900/40 border border-blue-800', text: 'No Prazo', value: 'No Prazo' };
     
     const hoje = new Date().toISOString().split('T')[0];
@@ -531,13 +612,13 @@ function AdminDashboard() {
   const macroMetrics = useMemo(() => {
     const activeData = filteredData;
     
-    const itensRealizados = activeData.filter(d => getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value === 'Emitido');
+    const itensRealizados = activeData.filter(d => getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado, d.forceEmitido).value === 'Emitido');
     const realizadoValor = itensRealizados.reduce((acc, curr) => acc + (curr.valor_realizado || 0), 0); 
     const realizadoEnergiaKwh = itensRealizados.reduce((acc, curr) => acc + (curr.compensacao_real_kwh || 0), 0);
     const realizadoEnergiaMWh = realizadoEnergiaKwh / 1000;
     const tarifaMediaRealizada = realizadoEnergiaKwh > 0 ? realizadoValor / realizadoEnergiaKwh : 0;
 
-    const itensPendentes = activeData.filter(d => getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value !== 'Emitido');
+    const itensPendentes = activeData.filter(d => getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado, d.forceEmitido).value !== 'Emitido');
     const pendenteValor = itensPendentes.reduce((acc, curr) => acc + (curr.valor_potencial || 0), 0); 
     const pendenteEnergiaKwh = itensPendentes.reduce((acc, curr) => acc + ((curr.consumo_mwh || 0) * 1000), 0);
     const pendenteEnergiaMwh = pendenteEnergiaKwh / 1000;
@@ -911,7 +992,7 @@ function AdminDashboard() {
 
       emissaoBaseData.forEach(d => {
           if (d.fonte_dados === 'LUMI' || d.fonte_dados === 'UNIFICA') coletadas++;
-          const st = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
+          const st = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado, d.forceEmitido).value;
           if (st === 'Emitido') emitidos++;
           else if (st === 'Atrasado') atrasados++;
           else if (st === 'No Prazo') noPrazo++;
@@ -922,7 +1003,7 @@ function AdminDashboard() {
 
   const emissaoMetrics = useMemo(() => {
     const itensRealizados = emissaoBaseData.filter(d => {
-        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
+        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado, d.forceEmitido).value;
         return status === 'Emitido';
     });
     
@@ -931,7 +1012,7 @@ function AdminDashboard() {
     const tarifaMediaRealizada = (realizadoEnergiaMWh * 1000) > 0 ? realizadoValor / (realizadoEnergiaMWh * 1000) : 0;
 
     const itensPendentes = emissaoBaseData.filter(d => {
-        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado).value;
+        const status = getStatusColor(d.data_prevista_norm, d.data_emissao_norm, d.valor_realizado, d.forceEmitido).value;
         return status !== 'Emitido';
     });
     
@@ -1026,7 +1107,7 @@ function AdminDashboard() {
         
         let matchStatus = true;
         if (opFilterStatus !== 'Todos') {
-            const statusInfo = getStatusColor(item.data_prevista_norm, item.data_emissao_norm, item.valor_realizado);
+            const statusInfo = getStatusColor(item.data_prevista_norm, item.data_emissao_norm, item.valor_realizado, item.forceEmitido);
             matchStatus = statusInfo.value === opFilterStatus;
         }
         
@@ -1272,7 +1353,7 @@ function AdminDashboard() {
                 </div>
                 <div className="flex flex-col gap-2">
                     <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><CalendarIcon size={12}/> Período de Emissão Prevista</label>
-                    <DateRangePicker selectedRange={dateRange} onChange={setDateRange} />
+                    <div className="relative z-50"><DateRangePicker selectedRange={dateRange} onChange={setDateRange} /></div>
                 </div>
             </>
         )}
@@ -1285,7 +1366,7 @@ function AdminDashboard() {
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Inconsistência</label>
-                  <MultiSelect fullWidth options={auditData.options.inconsistencias} selected={auditFilterInconsistencia} onChange={setAuditFilterInconsistencia} placeholder="Qualquer Inconsistência" />
+                  <div className="relative z-50"><MultiSelect fullWidth options={auditData.options.inconsistencias} selected={auditFilterInconsistencia} onChange={setAuditFilterInconsistencia} placeholder="Qualquer Inconsistência" /></div>
                 </div>
             </>
         )}
@@ -1301,19 +1382,19 @@ function AdminDashboard() {
                 </div>
                 <div className="flex flex-col gap-2">
                     <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Concessionária</label>
-                    <MultiSelect options={crmProcessed.options.concessionarias.filter((o: string) => o !== 'Todas')} selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Todas" fullWidth />
+                    <div className="relative z-50"><MultiSelect options={crmProcessed.options.concessionarias.filter((o: string) => o !== 'Todas')} selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Todas" fullWidth /></div>
                 </div>
                 <div className="flex flex-col gap-2">
                     <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Área de Gestão</label>
-                    <MultiSelect options={crmProcessed.options.areas.filter((o: string) => o !== 'Todas')} selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Todas" fullWidth />
+                    <div className="relative z-50"><MultiSelect options={crmProcessed.options.areas.filter((o: string) => o !== 'Todas')} selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Todas" fullWidth /></div>
                 </div>
                 <div className="flex flex-col gap-2">
                     <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Etapa</label>
-                    <MultiSelect options={crmProcessed.options.etapas.filter((o: string) => o !== 'Todas')} selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Todas" fullWidth />
+                    <div className="relative z-50"><MultiSelect options={crmProcessed.options.etapas.filter((o: string) => o !== 'Todas')} selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Todas" fullWidth /></div>
                 </div>
                 <div className="flex flex-col gap-2">
                     <label className="text-xs text-slate-500 font-bold font-display flex items-center gap-1 uppercase tracking-wider"><Filter size={12}/> Status RD</label>
-                    <MultiSelect options={crmProcessed.options.status.filter((o: string) => o !== 'Todos')} selected={crmFilterStatus} onChange={setCrmFilterStatus} placeholder="Todos" fullWidth />
+                    <div className="relative z-50"><MultiSelect options={crmProcessed.options.status.filter((o: string) => o !== 'Todos')} selected={crmFilterStatus} onChange={setCrmFilterStatus} placeholder="Todos" fullWidth /></div>
                 </div>
             </>
         )}
@@ -1846,6 +1927,7 @@ function AdminDashboard() {
                                 {emissaoColunas.includes('Consumo (Fatura)') && <th className="px-6 py-4 text-right text-emerald-400 bg-emerald-900/10">Cons. Fatura</th>}
                                 {emissaoColunas.includes('Compensação (Fatura)') && <th className="px-6 py-4 text-right text-emerald-400 bg-emerald-900/10">Compensação</th>}
                                 {emissaoColunas.includes('Eficiência (%)') && <th className="px-6 py-4 text-center text-emerald-400 bg-emerald-900/10">Eficiência</th>}
+                                {emissaoColunas.includes('Saldo Base (kWh)') && <th className="px-6 py-4 text-right text-amber-400 bg-amber-900/10">Saldo (kWh)</th>}
 
                                 <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('valor_potencial')}>
                                     <div className="flex items-center justify-end gap-1">Projeção (R$) <ArrowUpDown size={14}/></div>
@@ -1861,7 +1943,7 @@ function AdminDashboard() {
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                             {paginatedEmissaoData.map((row: any) => {
-                            const status = getStatusColor(row.data_prevista_norm, row.data_emissao_norm, row.valor_realizado);
+                            const status = getStatusColor(row.data_prevista_norm, row.data_emissao_norm, row.valor_realizado, row.forceEmitido);
                             const payBadge = getPaymentBadge(row.status_norm);
                             
                             const eficPercent = row.eficiencia_compensacao * 100;
@@ -1871,7 +1953,8 @@ function AdminDashboard() {
                             if (eficPercent >= 90) { eficColor = 'text-emerald-400'; eficBg = 'bg-emerald-900/40 border-emerald-800/50'; }
                             else if (eficPercent >= 70) { eficColor = 'text-yellow-400'; eficBg = 'bg-yellow-900/40 border-yellow-800/50'; }
 
-                            const isMeasuredEfic = status.value === 'Emitido' || status.value === 'Atrasado' || row.consumo_real_kwh > 0 || row.compensacao_real_kwh > 0;
+                            // Como agora temos as colunas limpas se não emitidas, a medida da efic será controlada apenas pelo Emitido
+                            const isMeasuredEfic = status.value === 'Emitido';
 
                             return (
                                 <tr key={`${row.uc}-${row.mes_norm}`} className="hover:bg-slate-800/50 transition-colors whitespace-nowrap">
@@ -1887,7 +1970,7 @@ function AdminDashboard() {
                                 </td>
 
                                 <td className="px-6 py-4 font-medium text-slate-300">{toDateBR(row.data_prevista_norm)}</td>
-                                <td className="px-6 py-4 text-slate-400">{toDateBR(row.data_emissao_norm)}</td>
+                                <td className="px-6 py-4 text-slate-400">{toDateBR(row.data_emissao_distribuidora)}</td>
                                 
                                 {emissaoColunas.includes('Consumo RD (kWh)') && (
                                     <td className="px-6 py-4 text-right font-mono text-blue-300 bg-blue-900/10 border-l border-slate-800/50">
@@ -1901,17 +1984,21 @@ function AdminDashboard() {
                                 )}
                                 {emissaoColunas.includes('Tarifa Fatura (Real)') && (
                                     <td className="px-6 py-4 text-right font-mono text-emerald-300 bg-emerald-900/10 border-l border-slate-800/50">
-                                        {formatTarifa(row.tarifa_real)}
+                                        {status.value === 'Emitido' ? formatTarifa(row.tarifa_real) : <span className="text-slate-500">-</span>}
                                     </td>
                                 )}
                                 {emissaoColunas.includes('Consumo (Fatura)') && (
                                     <td className="px-6 py-4 text-right font-mono text-emerald-300 bg-emerald-900/10">
-                                        {new Intl.NumberFormat('pt-BR').format(row.consumo_real_kwh)} <span className="text-[10px]">kWh</span>
+                                        {status.value === 'Emitido' ? (
+                                            <>{new Intl.NumberFormat('pt-BR').format(row.consumo_real_kwh)} <span className="text-[10px]">kWh</span></>
+                                        ) : <span className="text-slate-500">-</span>}
                                     </td>
                                 )}
                                 {emissaoColunas.includes('Compensação (Fatura)') && (
                                     <td className="px-6 py-4 text-right font-mono text-emerald-300 bg-emerald-900/10">
-                                        {new Intl.NumberFormat('pt-BR').format(row.compensacao_real_kwh)} <span className="text-[10px]">kWh</span>
+                                        {status.value === 'Emitido' ? (
+                                            <>{new Intl.NumberFormat('pt-BR').format(row.compensacao_real_kwh)} <span className="text-[10px]">kWh</span></>
+                                        ) : <span className="text-slate-500">-</span>}
                                     </td>
                                 )}
                                 {emissaoColunas.includes('Eficiência (%)') && (
@@ -1923,10 +2010,15 @@ function AdminDashboard() {
                                         ) : <span className="text-slate-500">-</span>}
                                     </td>
                                 )}
+                                {emissaoColunas.includes('Saldo Base (kWh)') && (
+                                    <td className="px-6 py-4 text-right font-mono text-amber-300 bg-amber-900/10 border-r border-slate-800/50">
+                                        {new Intl.NumberFormat('pt-BR').format(row.saldo_utilizado_kwh)} <span className="text-[10px]">kWh</span>
+                                    </td>
+                                )}
 
                                 <td className="px-6 py-4 text-right font-medium text-blue-400">{formatMoney(row.valor_potencial)}</td>
                                 <td className="px-6 py-4 text-right font-bold text-emerald-400">
-                                    {row.valor_realizado > 0 ? formatMoney(row.valor_realizado) : <span className="text-slate-600">-</span>}
+                                    {status.value === 'Emitido' ? formatMoney(row.valor_realizado) : <span className="text-slate-600">-</span>}
                                 </td>
                                 
                                 <td className="px-6 py-4 text-center">
@@ -1959,6 +2051,7 @@ function AdminDashboard() {
                                 {emissaoColunas.includes('Consumo (Fatura)') && <td></td>}
                                 {emissaoColunas.includes('Compensação (Fatura)') && <td></td>}
                                 {emissaoColunas.includes('Eficiência (%)') && <td></td>}
+                                {emissaoColunas.includes('Saldo Base (kWh)') && <td></td>}
 
                                 <td className="px-6 py-4 text-right text-blue-400 text-base">{formatMoney(totalEmissaoEstimado)}</td>
                                 <td className="px-6 py-4 text-right text-emerald-400 text-base border-r border-slate-800">{formatMoney(totalEmissaoRealizado)}</td>

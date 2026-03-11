@@ -28,25 +28,23 @@ CONTAS = [
     }
 ]
 
-# Campos que pedimos para a API da Lumi
+# Campos que pedimos para a API da Lumi (ADICIONADO data_emissao)
 CAMPOS_LUMI = [
     "uc", "nome", "mes_referencia", "consumo_total_faturado_qt", "valor_total_fatura", "drive_id",
     "payments.energia_compensada", "payments.economia", "payments.status_cobranca_asaas",
     "payments.vencimento", "payments.remuneracao_geracao", "payments.sent_at",
     "payments.asaas_payment_id",
-    "creditos_estoque_tot"
+    "creditos_estoque_tot", "data_emissao"
 ]
 
-# Conexão com Banco - Adicionado pool_pre_ping para evitar conexões mortas
+# Conexão com Banco
 engine = create_engine(DB_URL, pool_pre_ping=True)
 
 # --- FUNÇÕES AUXILIARES ---
 
 def login_lumi(email, senha):
-    """Faz login e retorna o token JWT com timeout de segurança"""
     try:
         if not email or not senha: return None
-        # Timeout de 30s evita que o GitHub Actions trave se a API não responder
         resp = requests.post(f"{LUMI_URL}/login", json={"email": email, "senha": senha}, timeout=30)
         return resp.json().get("token") if resp.status_code == 200 else None
     except Exception as e:
@@ -77,6 +75,7 @@ def processar_fatura(item, nome_conta):
         "economia_total": limpar_numero(item.get("economia")),
         "remuneracao_geracao": limpar_numero(item.get("remuneracao_geracao")), 
         "data_envio": tratar_data(item.get("sent_at")), 
+        "data_emissao": tratar_data(item.get("data_emissao")), # <-- ADICIONADO AQUI
         "status_pagamento": item.get("status_cobranca_asaas"),
         "vencimento": tratar_data(item.get("vencimento")),
         "link_boleto": item.get("drive_id"), 
@@ -103,13 +102,13 @@ def salvar_em_lotes(lista_faturas, nome_conta):
         INSERT INTO raw_lumi (
             uc, mes_referencia, nome_cliente, consumo_kwh, 
             energia_compensada, valor_total_fatura, economia_total, 
-            remuneracao_geracao, data_envio, status_pagamento, 
+            remuneracao_geracao, data_envio, data_emissao, status_pagamento, 
             vencimento, link_boleto, updated_at, origem_conta, asaas_id, creditos_estoque_tot
         )
         VALUES (
             :uc, :mes_referencia, :nome_cliente, :consumo_kwh, 
             :energia_compensada, :valor_total_fatura, :economia_total, 
-            :remuneracao_geracao, :data_envio, :status_pagamento, 
+            :remuneracao_geracao, :data_envio, :data_emissao, :status_pagamento, 
             :vencimento, :link_boleto, :updated_at, :origem_conta, :asaas_id, :creditos_estoque_tot
         )
         ON CONFLICT (uc, mes_referencia) DO UPDATE SET
@@ -120,6 +119,7 @@ def salvar_em_lotes(lista_faturas, nome_conta):
             economia_total = EXCLUDED.economia_total,
             remuneracao_geracao = EXCLUDED.remuneracao_geracao,
             data_envio = EXCLUDED.data_envio,
+            data_emissao = EXCLUDED.data_emissao,
             status_pagamento = EXCLUDED.status_pagamento,
             vencimento = EXCLUDED.vencimento,
             updated_at = EXCLUDED.updated_at,
@@ -131,7 +131,6 @@ def salvar_em_lotes(lista_faturas, nome_conta):
     try:
         with engine.begin() as conn: 
             conn.execute(stmt, dados_prontos)
-        # Flush=True garante que o log apareça no GitHub na hora
         print(f"    ✅ [{nome_conta}] Lote salvo: {len(dados_prontos)} registros.", flush=True)
     except Exception as e:
         print(f"    ❌ Erro ao salvar no banco: {e}", flush=True)
