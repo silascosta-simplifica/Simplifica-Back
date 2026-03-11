@@ -5,7 +5,7 @@
     "node": "20.x"
   },
   "scripts": {
-    "heroku-postbuild": "cd frontend && npm install --legacy-peer-deps && npm run build",
+    "heroku-postbuild": "cd frontend && npm install --legacy-peer-deps --include=dev && npm run build",
     "start": "cd frontend && npx serve -s dist --listen $PORT"
   },
   "dependencies": {
