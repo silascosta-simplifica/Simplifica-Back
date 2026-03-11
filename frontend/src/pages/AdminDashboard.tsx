@@ -13,20 +13,8 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: markerIcon2x,
-    iconUrl: markerIcon,
-    shadowUrl: markerShadow,
-});
 
 // --- COMPONENTES AUXILIARES ---
 
@@ -47,27 +35,40 @@ const getConcLogo = (name: string | null) => {
     return null;
 };
 
+const PIN_COLORS: Record<string, { color: string; fill: string; label: string }> = {
+    won:         { color: '#1d4ed8', fill: '#3b82f6', label: 'Ativo' },
+    lost:        { color: '#b91c1c', fill: '#ef4444', label: 'Inativo / Cancelado' },
+    in_progress: { color: '#92400e', fill: '#f59e0b', label: 'Em andamento' },
+    default:     { color: '#374151', fill: '#6b7280', label: 'Sem status' },
+};
+
+function getPinColor(objetivo_etapa: string | null | undefined) {
+    if (!objetivo_etapa) return PIN_COLORS.default;
+    const key = objetivo_etapa.toLowerCase().trim();
+    return PIN_COLORS[key] ?? PIN_COLORS.default;
+}
+
 const ClientMap = ({ clients }: { clients: any[] }) => {
     const locations = useMemo(() => {
         const points: any[] = [];
-        let validos = 0;
-        
+
         clients.forEach(c => {
             if (c.latitude && c.longitude) {
-                validos++;
                 const lat = Number(c.latitude) + (Math.random() - 0.5) * 0.0002;
                 const lng = Number(c.longitude) + (Math.random() - 0.5) * 0.0002;
                 const idNegocioEncontrado = c.id_negocio || c.ID_NEGOCIO || c.deal_id || c.id_rd || null;
 
                 points.push({
                     id: c.uc || Math.random(),
-                    lat: lat,
-                    lng: lng,
+                    lat,
+                    lng,
                     name: c.nome_negocio || 'Sem Nome',
                     city: c.cidade || 'Desconhecido',
                     uf: c.uf || '',
                     mwh: Number(c.consumo_medio_mwh) || 0,
-                    dealId: idNegocioEncontrado
+                    dealId: idNegocioEncontrado,
+                    objetivo_etapa: c.objetivo_etapa || null,
+                    status_rd: c.status_rd || null,
                 });
             }
         });
@@ -91,32 +92,53 @@ const ClientMap = ({ clients }: { clients: any[] }) => {
     return (
         <div className="h-full w-full bg-slate-900 rounded-xl overflow-hidden relative z-0">
             <MapContainer center={[-15.79, -47.88]} zoom={4} style={{ height: '100%', width: '100%' }} preferCanvas={true}>
-                <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-                {locations.map((loc) => (
-                    <Marker key={loc.id} position={[loc.lat, loc.lng]}>
-                        <Popup className="custom-popup">
-                            <div className="p-1 min-w-[150px]">
-                                <h4 className="font-bold font-display text-slate-800 text-sm mb-1 border-b pb-1">{loc.city}-{loc.uf}</h4>
-                                <div className="text-xs text-slate-600 mt-1">
-                                    {loc.dealId ? (
-                                        <a href={`https://crm.rdstation.com/app/deals/${loc.dealId}`} target="_blank" rel="noopener noreferrer" className="truncate font-bold text-blue-600 hover:text-blue-800 hover:underline block mb-1" title="Abrir Negócio no RD Station">
-                                            {loc.name}
-                                        </a>
-                                    ) : (
-                                        <p className="truncate font-medium text-slate-800 mb-1">{loc.name}</p>
-                                    )}
-                                    <p className="mt-1">
-                                        Consumo: <span className="font-bold text-emerald-600">{new Intl.NumberFormat('pt-BR').format(Math.round(loc.mwh * 1000))} kWh</span>
-                                    </p>
+                <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                {locations.map((loc) => {
+                    const pin = getPinColor(loc.objetivo_etapa);
+                    return (
+                        <CircleMarker
+                            key={loc.id}
+                            center={[loc.lat, loc.lng]}
+                            radius={6}
+                            pathOptions={{ color: pin.color, fillColor: pin.fill, fillOpacity: 0.85, weight: 1.5 }}
+                        >
+                            <Popup className="custom-popup">
+                                <div className="p-1 min-w-[160px]">
+                                    <h4 className="font-bold font-display text-slate-800 text-sm mb-1 border-b pb-1">{loc.city}{loc.uf ? ` - ${loc.uf}` : ''}</h4>
+                                    <div className="text-xs text-slate-600 mt-1 space-y-1">
+                                        {loc.dealId ? (
+                                            <a href={`https://crm.rdstation.com/app/deals/${loc.dealId}`} target="_blank" rel="noopener noreferrer" className="truncate font-bold text-blue-600 hover:text-blue-800 hover:underline block" title="Abrir Negócio no RD Station">
+                                                {loc.name}
+                                            </a>
+                                        ) : (
+                                            <p className="truncate font-medium text-slate-800">{loc.name}</p>
+                                        )}
+                                        {loc.status_rd && <p>Etapa: <span className="font-semibold text-slate-700">{loc.status_rd}</span></p>}
+                                        <p>Consumo: <span className="font-bold text-emerald-600">{new Intl.NumberFormat('pt-BR').format(Math.round(loc.mwh * 1000))} kWh</span></p>
+                                    </div>
                                 </div>
-                            </div>
-                        </Popup>
-                    </Marker>
-                ))}
+                            </Popup>
+                        </CircleMarker>
+                    );
+                })}
             </MapContainer>
-            <div className="absolute top-4 right-4 z-[400]">
-                <div className="bg-slate-900/90 backdrop-blur text-xs text-white px-4 py-2 rounded-lg border border-slate-600 shadow-md font-medium">
-                    {locations.length} Locais Encontrados
+
+            {/* Contagem */}
+            <div className="absolute top-3 right-3 z-[400]">
+                <div className="bg-white/90 backdrop-blur text-xs text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow font-medium">
+                    {locations.length} locais
+                </div>
+            </div>
+
+            {/* Legenda */}
+            <div className="absolute bottom-6 left-3 z-[400]">
+                <div className="bg-white/90 backdrop-blur text-xs text-slate-700 px-3 py-2 rounded-lg border border-slate-200 shadow space-y-1.5">
+                    {Object.entries(PIN_COLORS).filter(([k]) => k !== 'default').map(([, v]) => (
+                        <div key={v.label} className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full flex-shrink-0 border" style={{ backgroundColor: v.fill, borderColor: v.color }} />
+                            <span>{v.label}</span>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -1299,8 +1321,8 @@ function AdminDashboard() {
   const pctFaturado = generalMetrics.totalUCs > 0 ? Math.round((macroMetrics.qtdRealizado / generalMetrics.totalUCs) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans p-6 pb-20">
-      <header className="flex flex-col md:flex-row items-center justify-between mb-6 border-b border-slate-800 pb-5 gap-6">
+    <div className={`bg-slate-950 text-white font-sans ${currentTab === 'localizacao' ? 'h-screen overflow-hidden flex flex-col p-4' : 'min-h-screen p-6 pb-20'}`}>
+      <header className={`flex flex-col md:flex-row items-center justify-between border-b border-slate-800 gap-6 flex-shrink-0 ${currentTab === 'localizacao' ? 'mb-3 pb-3' : 'mb-6 pb-5'}`}>
         <div className="flex items-center gap-4">
           <img src="https://www.ludfor.com.br/arquivos/0d5ce42bc0728ac08a186e725fafac7db6421507.png" alt="Logo Simplifica Energia" className="h-10 w-auto object-contain" />
           <div>
@@ -2503,25 +2525,25 @@ function AdminDashboard() {
       )}
 
       {currentTab === 'localizacao' && (
-        <div className="animate-in fade-in zoom-in duration-300 h-[calc(100vh-200px)] flex flex-col">
-            <div className="bg-slate-900 p-4 rounded-t-2xl border border-slate-800 border-b-0 flex flex-wrap gap-3 items-center z-10">
-                <span className="text-sm font-bold font-display text-slate-400 mr-2 flex items-center gap-2"><Filter size={16}/> Filtros do Mapa:</span>
-                <div className="w-full md:w-48">
-                    <MultiSelect 
-                        options={crmProcessed.options.concessionarias.filter(o => o !== 'Todas')} 
-                        selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Concessionárias" 
+        <div className="animate-in fade-in zoom-in duration-300 flex-1 min-h-0 flex flex-col">
+            <div className="bg-slate-900 px-3 py-2 rounded-t-2xl border border-slate-700 border-b-0 flex flex-wrap gap-2 items-center z-10 flex-shrink-0">
+                <span className="text-xs font-bold font-display text-slate-400 mr-1 flex items-center gap-1.5"><Filter size={13}/> Filtros:</span>
+                <div className="w-full md:w-36">
+                    <MultiSelect
+                        options={crmProcessed.options.concessionarias.filter(o => o !== 'Todas')}
+                        selected={crmFilterConcessionaria} onChange={setCrmFilterConcessionaria} placeholder="Concessionárias"
                     />
                 </div>
-                <div className="w-full md:w-48">
-                    <MultiSelect 
-                        options={crmProcessed.options.areas.filter(o => o !== 'Todas')} 
-                        selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Áreas" 
+                <div className="w-full md:w-36">
+                    <MultiSelect
+                        options={crmProcessed.options.areas.filter(o => o !== 'Todas')}
+                        selected={crmFilterArea} onChange={setCrmFilterArea} placeholder="Áreas"
                     />
                 </div>
-                <div className="w-full md:w-48">
-                    <MultiSelect 
-                        options={crmProcessed.options.etapas.filter(o => o !== 'Todas')} 
-                        selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Etapas" 
+                <div className="w-full md:w-36">
+                    <MultiSelect
+                        options={crmProcessed.options.etapas.filter(o => o !== 'Todas')}
+                        selected={crmFilterEtapa} onChange={setCrmFilterEtapa} placeholder="Etapas"
                     />
                 </div>
                 <div className="ml-auto text-xs text-slate-500">
@@ -2529,7 +2551,7 @@ function AdminDashboard() {
                 </div>
             </div>
 
-            <div className="bg-slate-900 flex-1 rounded-b-2xl border border-slate-800 shadow-lg overflow-hidden relative">
+            <div className="flex-1 min-h-0 rounded-b-2xl border border-slate-700 border-t-0 shadow-lg overflow-hidden relative">
                <ClientMap clients={crmProcessed.filtered} />
             </div>
         </div>
